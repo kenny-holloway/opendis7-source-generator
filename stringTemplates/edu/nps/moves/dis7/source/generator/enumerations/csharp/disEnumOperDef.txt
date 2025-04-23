@@ -1,0 +1,14 @@
+        public static string ToString(%s enumValue)
+        {
+           return enumValue.ToString();
+        }
+
+        public static bool IsValid(%s enumValue)
+        {
+           return Enum.IsDefined(typeof(%s), enumValue);
+        }
+
+        public static void AddCustomValue(%s enumValue, string name)
+        {
+            %s[enumValue] = name;
+        }

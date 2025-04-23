@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2008-2023, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
+ * Copyright (c) 2008-2025, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
  * This work is provided under a BSD open-source license, see project license.html and license.txt
  */
 package edu.nps.moves.dis7.source.generator.pdus;
@@ -109,6 +109,18 @@ public class GeneratedInitialValue // TODO refactor rename as GeneratedInitialVa
         stb.setCharAt(0, Character.toUpperCase(aString.charAt(0)));
         
         return new String(stb);
+    }
+
+    public String ToString(String... indent)
+    {
+        String tabs = "";
+        if (indent.length > 0)
+            tabs += indent[0];
+
+        String stringValue = "";
+        stringValue += tabs + "///         Value : " + getVariableValue() + "\n";
+        stringValue += tabs + "/// Setter Method : " + getSetterMethodName() + "\n";
+        return stringValue;
     }
     
 }

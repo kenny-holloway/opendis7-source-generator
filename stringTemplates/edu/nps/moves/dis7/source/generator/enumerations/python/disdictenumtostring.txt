@@ -1,0 +1,3 @@
+    @staticmethod
+    def get_description(tag: str) -> str:
+        return %s._%s[tag]

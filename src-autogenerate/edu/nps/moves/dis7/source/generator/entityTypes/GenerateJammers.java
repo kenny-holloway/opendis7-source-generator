@@ -1,12 +1,19 @@
 /**
- * Copyright (c) 2008-2023, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
+ * Copyright (c) 2008-2025, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
  * This work is provided under a BSD open-source license, see project license.html and license.txt
  */
 
 package edu.nps.moves.dis7.source.generator.entityTypes;
 
+import edu.nps.moves.dis7.source.generator.enumerations.StringUtils;
+
+import java.io.*;
+import java.util.*;
+
 import java.io.File;
 import java.io.FileWriter;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -38,6 +45,20 @@ public class GenerateJammers
     private static String         sisoXmlFile = edu.nps.moves.dis7.source.generator.GenerateOpenDis7JavaPackages.DEFAULT_SISO_XML_FILE;
     private static String       sisoSpecificationTitleDate = "";
 
+    // Prefix used for c++
+    public static final String IVAR_PREFIX ="_";
+
+    String globalNamespace = "";
+    String enumNamespace = "";
+    String currentNamespace = "";
+
+    /** String constant */ public static final String JAVA = "java";
+    /** String constant */ public static final String CPP = "cpp";
+    /** String constant */ public static final String OBJC = "objc";
+    /** String constant */ public static final String CSHARP = "csharp";
+    /** String constant */ public static final String JAVASCRIPT = "javascript";
+    /** String constant */ public static final String PYTHON = "python";
+
     String jammertechniqueTemplate;
     String         licenseTemplate;
 
@@ -63,7 +84,7 @@ public class GenerateJammers
      * @param xmlFile sisoXmlFile
      * @param outputDir outputDirectoryPath
      * @param packageName key to package name for jammer */
-  public GenerateJammers(String xmlFile, String outputDir, String packageName)
+  public GenerateJammers(String xmlFile, String outputDir, String packageName, String languageToGenerate)
   {
         if (!xmlFile.isEmpty())
              sisoXmlFile = xmlFile;
@@ -71,54 +92,75 @@ public class GenerateJammers
             outputDirectoryPath = outputDir;
         if (!packageName.isEmpty())
            GenerateJammers.packageName = packageName;
+        if (!languageToGenerate.isEmpty())
+          language = languageToGenerate;
+
+        Properties systemProperties = System.getProperties();
+        globalNamespace = systemProperties.getProperty("xmlpg.namespace");
+          if (globalNamespace == null)
+              globalNamespace = "";
+
+          // set global namespace for enums
+          enumNamespace = systemProperties.getProperty("xmlpg.enumNamespace");
+          if (enumNamespace == null)
+              enumNamespace = "";
+
         System.out.println (GenerateJammers.class.getName());
         System.out.println ("              xmlFile=" + sisoXmlFile);
         System.out.println ("          packageName=" + GenerateJammers.packageName);
         System.out.println ("  outputDirectoryPath=" + outputDirectoryPath);
+        System.out.println ("             language=" + language);
+        System.out.println("             namespace= " + globalNamespace);
+        System.out.println("        enum namespace= " + enumNamespace);
         
         outputDirectory  = new File(outputDirectoryPath);
         outputDirectory.mkdirs();
 //      FileUtils.cleanDirectory(outputDirectory); // do NOT clean directory, results can co-exist with other classes
         System.out.println ("actual directory path=" + outputDirectory.getAbsolutePath());
 
-        packageInfoPath = outputDirectoryPath + "/" + "package-info.java";
-        packageInfoFile = new File(packageInfoPath);
-        
-        FileWriter packageInfoFileWriter;
-        try {
-            packageInfoFile.createNewFile();
-            packageInfoFileWriter = new FileWriter(packageInfoFile, StandardCharsets.UTF_8);
-            packageInfoBuilder = new StringBuilder();
-            packageInfoBuilder.append("/**\n");
-            packageInfoBuilder.append(" * Jammers type infrastructure classes for ").append(sisoSpecificationTitleDate).append(" enumerations.\n");
-            packageInfoBuilder.append("\n");
-            packageInfoBuilder.append(" * <p> Online references: </p>\n");
-            packageInfoBuilder.append(" * <ul>\n");
-            packageInfoBuilder.append(" *      <li> GitHub <a href=\"https://github.com/open-dis/open-dis7-java\" target=\"_blank\">open-dis7-java library</a> </li> \n");
-            packageInfoBuilder.append(" *      <li> NPS <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/examples/src/OpenDis7Examples\" target=\"MV3500\">MV3500 Distributed Simulation Fundamentals course examples</a> </li> \n");
-            packageInfoBuilder.append(" *      <li> <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/specifications/README.md\" target=\"README.MV3500\">IEEE and SISO specification references</a> of interest</li> \n");
-            packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostandards.org/page/ReferenceDocuments\" target=\"SISO-REF-010\" >SISO-REF-010-2024 (v34) Reference for Enumerations for Simulation Interoperability</a> </li> \n");
-            packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostandards.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=47284\" target=\"SISO-REF-10.1\">SISO-REF-10.1-2019 Reference for Enumerations for Simulation, Operations Manual</a></li>\n");
-            packageInfoBuilder.append(" *      <li> <a href=\"https://savage.nps.edu/open-dis7-java/javadoc\" target=\"_blank\">open-dis7 Javadoc</a>, <a href=\"https://savage.nps.edu/open-dis7-java/xml/DIS_7_2012.autogenerated.xsd\" target=\"_blank\">open-dis7 XML Schema</a>and <a href=\"https://savage.nps.edu/open-dis7-java/xml/SchemaDocumentation\" target=\"_blank\">open-dis7 XML Schema documentation</a></li> </ul>\n");
-            packageInfoBuilder.append("\n");
-            packageInfoBuilder.append(" * @see java.lang.Package\n");
-            packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful\">https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful</a>\n");
-            packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java\">https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java</a>\n");
-            packageInfoBuilder.append(" *").append("/\n");
-            packageInfoBuilder.append("\n");
-            packageInfoBuilder.append("package edu.nps.moves.dis7.jammers;\n");
+        if (language.toLowerCase().equals(JAVA))
+        {
+          packageInfoPath = outputDirectoryPath + "/" + "package-info.java";
+          packageInfoFile = new File(packageInfoPath);
+          
+          OutputStreamWriter packageInfoFileWriter;
+          FileOutputStream fso;
+          try {
+              packageInfoFile.createNewFile();
+              fso = new FileOutputStream(packageInfoFile);
+              packageInfoFileWriter = new OutputStreamWriter(fso, StandardCharsets.UTF_8);
+              packageInfoBuilder = new StringBuilder();
+              packageInfoBuilder.append("/**\n");
+              packageInfoBuilder.append(" * Jammers type infrastructure classes for ").append(sisoSpecificationTitleDate).append(" enumerations.\n");
+              packageInfoBuilder.append("\n");
+              packageInfoBuilder.append(" * <p> Online references: </p>\n");
+              packageInfoBuilder.append(" * <ul>\n");
+              packageInfoBuilder.append(" *      <li> GitHub <a href=\"https://github.com/open-dis/open-dis7-java\" target=\"_blank\">open-dis7-java library</a> </li> \n");
+              packageInfoBuilder.append(" *      <li> NPS <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/examples/src/OpenDis7Examples\" target=\"MV3500\">MV3500 Distributed Simulation Fundamentals course examples</a> </li> \n");
+              packageInfoBuilder.append(" *      <li> <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/specifications/README.md\" target=\"README.MV3500\">IEEE and SISO specification references</a> of interest</li> \n");
+              packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostds.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=46172\" target=\"SISO-REF-010\" >SISO-REF-010-2022 Reference for Enumerations for Simulation Interoperability</a> </li> \n");
+              packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostds.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=47284\" target=\"SISO-REF-10.1\">SISO-REF-10.1-2019 Reference for Enumerations for Simulation, Operations Manual</a></li>\n");
+              packageInfoBuilder.append(" *      <li> <a href=\"https://savage.nps.edu/open-dis7-java/javadoc\" target=\"_blank\">open-dis7 Javadoc</a>, <a href=\"https://savage.nps.edu/open-dis7-java/xml/DIS_7_2012.autogenerated.xsd\" target=\"_blank\">open-dis7 XML Schema</a>and <a href=\"https://savage.nps.edu/open-dis7-java/xml/SchemaDocumentation\" target=\"_blank\">open-dis7 XML Schema documentation</a></li> </ul>\n");
+              packageInfoBuilder.append("\n");
+              packageInfoBuilder.append(" * @see java.lang.Package\n");
+              packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful\">https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful</a>\n");
+              packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java\">https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java</a>\n");
+              packageInfoBuilder.append(" *").append("/\n");
+              packageInfoBuilder.append("\n");
+              packageInfoBuilder.append("package edu.nps.moves.dis7.jammers;\n");
 
-            packageInfoFileWriter.write(packageInfoBuilder.toString());
-            packageInfoFileWriter.flush();
-            packageInfoFileWriter.close();
-            System.out.println("Created " + packageInfoPath);
-        }
-        catch (IOException ex) {
-            System.out.flush(); // avoid intermingled output
-            System.err.println (ex.getMessage()
-               + packageInfoFile.getAbsolutePath()
-            );
-            ex.printStackTrace(System.err);
+              packageInfoFileWriter.write(packageInfoBuilder.toString());
+              packageInfoFileWriter.flush();
+              packageInfoFileWriter.close();
+              System.out.println("Created " + packageInfoPath);
+          }
+          catch (IOException ex) {
+              System.out.flush(); // avoid intermingled output
+              System.err.println (ex.getMessage()
+                + packageInfoFile.getAbsolutePath()
+              );
+              ex.printStackTrace(System.err);
+          }
         }
   }
 
@@ -139,9 +181,19 @@ public class GenerateJammers
 
   private void loadTemplates()
   {
+    String languageFolder = this.language;
+
     try {
+
       licenseTemplate          = loadOneTemplate("../pdus/dis7javalicense.txt");
-      jammertechniqueTemplate  = loadOneTemplate("jammertechnique.txt");
+      if (language.toLowerCase().equals(JAVA))
+      {  
+        jammertechniqueTemplate  = loadOneTemplate("../entitytypes/jammertechnique.txt");
+      }
+      else
+      {
+        jammertechniqueTemplate  = loadOneTemplate("../entitytypes/" + languageFolder + "/jammertechnique.txt");
+      }
     }
     catch (Exception ex) {
       throw new RuntimeException(ex);
@@ -150,6 +202,12 @@ public class GenerateJammers
 
   private String loadOneTemplate(String s) throws Exception
   {
+    // String templateContents = new String(Files.readAllBytes(Paths.get(getClass().getResource(s).toURI())));
+    // System.out.println("Loading template : " + s);
+    // System.out.println("    class : " + getClass());
+    // System.out.println(" resource : " + getClass().getResource(s));
+    // System.out.println("      uri : " + getClass().getResource(s).toURI());
+
     return new String(Files.readAllBytes(Paths.get(getClass().getResource(s).toURI())));
   }
 
@@ -312,97 +370,209 @@ public class GenerateJammers
 
     private void saveJammerFile(TypeClassData data)
     {
-        data.sb.append("    }\n}\n");
-        saveFile(data.directory, data.className + ".java", data.sb.toString());
-      
-        packageInfoPath = data.directory + "/" + "package-info.java";
-        packageInfoFile = new File(packageInfoPath);
 
-        if (!packageInfoFile.exists()) // write package-info.java during first time through
+        if (language.toLowerCase().equals(CSHARP))
         {
-            FileWriter packageInfoFileWriter;
-            try {
-                packageInfoFile.createNewFile();
-                packageInfoFileWriter = new FileWriter(packageInfoFile, StandardCharsets.UTF_8);
-                packageInfoBuilder = new StringBuilder();
-                packageInfoBuilder.append("/**\n");
-                if (!data.countryNamePretty.isEmpty())
-                    packageInfoBuilder.append(" ").append(data.countryNamePretty);
-                if (!data.entityKindName.isEmpty())
-                    packageInfoBuilder.append(" ").append(data.entityKindName);
-                if (!data.countryValue.isEmpty() && !data.entityKindName.isEmpty())
-                    packageInfoBuilder.append(" j");
-                else
-                    packageInfoBuilder.append(" J");
-                packageInfoBuilder.append("ammers type infrastructure classes for ").append(sisoSpecificationTitleDate).append(" enumerations.\n");
-                packageInfoBuilder.append("\n");
-                packageInfoBuilder.append(" * <p> Online references: </p>\n");
-                packageInfoBuilder.append(" * <ul>\n");
-                packageInfoBuilder.append(" *      <li> GitHub <a href=\"https://github.com/open-dis/open-dis7-java\" target=\"_blank\">open-dis7-java library</a> </li> \n");
-                packageInfoBuilder.append(" *      <li> NPS <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/examples/src/OpenDis7Examples\" target=\"MV3500\">MV3500 Distributed Simulation Fundamentals course examples</a> </li> \n");
-                packageInfoBuilder.append(" *      <li> <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/specifications/README.md\" target=\"README.MV3500\">IEEE and SISO specification references</a> of interest</li> \n");
-                packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostandards.org/page/ReferenceDocuments\" target=\"SISO-REF-010\" >SISO-REF-010-2024 (v34) Reference for Enumerations for Simulation Interoperability</a> </li> \n");
-                packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostandards.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=47284\" target=\"SISO-REF-10.1\">SISO-REF-10.1-2019 Reference for Enumerations for Simulation, Operations Manual</a></li>\n");
-                packageInfoBuilder.append(" *      <li> <a href=\"https://savage.nps.edu/open-dis7-java/javadoc\" target=\"_blank\">open-dis7 Javadoc</a>, <a href=\"https://savage.nps.edu/open-dis7-java/xml/DIS_7_2012.autogenerated.xsd\" target=\"_blank\">open-dis7 XML Schema</a>and <a href=\"https://savage.nps.edu/open-dis7-java/xml/SchemaDocumentation\" target=\"_blank\">open-dis7 XML Schema documentation</a></li> </ul>\n");
-                packageInfoBuilder.append("\n");
-                packageInfoBuilder.append(" * @see java.lang.Package\n");
-                packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful\">https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful</a>\n");
-                packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java\">https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java</a>\n");
-                packageInfoBuilder.append(" */\n");
-                packageInfoBuilder.append("// created by edu/nps/moves/dis7/source/generator/entityTypes/GenerateJammers.java\n");
-                packageInfoBuilder.append("\n");
-                packageInfoBuilder.append("package ").append(data.pkg).append(";\n");
+          
+          saveFile(data.directory, data.className + ".cs", data.sb.toString());
+        }
+        else if (language.toLowerCase().equals(CPP))
+        {
+          saveFile(data.directory, data.className + ".h", data.sb.toString());
+        }
+        else if (language.toLowerCase().equals(PYTHON))
+        {
+          saveFile(data.directory, data.className + ".py", data.sb.toString());
+        }
+        else if (language.toLowerCase().equals(JAVA))
+        {
+          // data.sb.append("    }\n}\n");
+          saveFile(data.directory, data.className + ".java", data.sb.toString());  
+      
+          packageInfoPath = data.directory + "/" + "package-info.java";
+          packageInfoFile = new File(packageInfoPath);
 
-                packageInfoFileWriter.write(packageInfoBuilder.toString());
-                packageInfoFileWriter.flush();
-                packageInfoFileWriter.close();
-                System.out.println("Created " + packageInfoPath);
-            }
-            catch (IOException ex) {
-                System.out.flush(); // avoid intermingled output
-                System.err.println (ex.getMessage()
-                   + packageInfoFile.getAbsolutePath()
-                );
-                ex.printStackTrace(System.err);
-            }
+          if (!packageInfoFile.exists()) // write package-info.java during first time through
+          {
+            OutputStreamWriter packageInfoFileWriter;
+              FileOutputStream fso;
+              try {
+                  packageInfoFile.createNewFile();
+                  fso = new FileOutputStream(packageInfoFile);
+                  packageInfoFileWriter = new OutputStreamWriter(fso, StandardCharsets.UTF_8);
+                  packageInfoBuilder = new StringBuilder();
+                  packageInfoBuilder.append("/**\n");
+                  if (!data.countryNamePretty.isEmpty())
+                      packageInfoBuilder.append(" ").append(data.countryNamePretty);
+                  if (!data.entityKindName.isEmpty())
+                      packageInfoBuilder.append(" ").append(data.entityKindName);
+                  if (!data.countryValue.isEmpty() && !data.entityKindName.isEmpty())
+                      packageInfoBuilder.append(" j");
+                  else
+                      packageInfoBuilder.append(" J");
+                  packageInfoBuilder.append("ammers type infrastructure classes for ").append(sisoSpecificationTitleDate).append(" enumerations.\n");
+                  packageInfoBuilder.append("\n");
+                  packageInfoBuilder.append(" * <p> Online references: </p>\n");
+                  packageInfoBuilder.append(" * <ul>\n");
+                  packageInfoBuilder.append(" *      <li> GitHub <a href=\"https://github.com/open-dis/open-dis7-java\" target=\"_blank\">open-dis7-java library</a> </li> \n");
+                  packageInfoBuilder.append(" *      <li> NPS <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/examples/src/OpenDis7Examples\" target=\"MV3500\">MV3500 Distributed Simulation Fundamentals course examples</a> </li> \n");
+                  packageInfoBuilder.append(" *      <li> <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/specifications/README.md\" target=\"README.MV3500\">IEEE and SISO specification references</a> of interest</li> \n");
+                  packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostds.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=46172\" target=\"SISO-REF-010\" >SISO-REF-010-2022 Reference for Enumerations for Simulation Interoperability</a> </li> \n");
+                  packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostds.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=47284\" target=\"SISO-REF-10.1\">SISO-REF-10.1-2019 Reference for Enumerations for Simulation, Operations Manual</a></li>\n");
+                  packageInfoBuilder.append(" *      <li> <a href=\"https://savage.nps.edu/open-dis7-java/javadoc\" target=\"_blank\">open-dis7 Javadoc</a>, <a href=\"https://savage.nps.edu/open-dis7-java/xml/DIS_7_2012.autogenerated.xsd\" target=\"_blank\">open-dis7 XML Schema</a>and <a href=\"https://savage.nps.edu/open-dis7-java/xml/SchemaDocumentation\" target=\"_blank\">open-dis7 XML Schema documentation</a></li> </ul>\n");
+                  packageInfoBuilder.append("\n");
+                  packageInfoBuilder.append(" * @see java.lang.Package\n");
+                  packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful\">https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful</a>\n");
+                  packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java\">https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java</a>\n");
+                  packageInfoBuilder.append(" */\n");
+                  packageInfoBuilder.append("// created by edu/nps/moves/dis7/source/generator/entityTypes/GenerateJammers.java\n");
+                  packageInfoBuilder.append("\n");
+                  packageInfoBuilder.append("package ").append(data.pkg).append(";\n");
+
+                  packageInfoFileWriter.write(packageInfoBuilder.toString());
+                  packageInfoFileWriter.flush();
+                  packageInfoFileWriter.close();
+                  System.out.println("Created " + packageInfoPath);
+              }
+              catch (IOException ex) {
+                  System.out.flush(); // avoid intermingled output
+                  System.err.println (ex.getMessage()
+                    + packageInfoFile.getAbsolutePath()
+                  );
+                  ex.printStackTrace(System.err);
+              }
+          }
         }
     }
 
     private void appendCommonStatements(TypeClassData data)
     {
-      String contents = String.format(jammertechniqueTemplate, data.pkg,
-        sisoSpecificationTitleDate, 
-        "284", // TODO huh?
-        // TODO kind, category
-        data.className,data.className);
+      String contents = "";
+
+      if (language.toLowerCase().equals(JAVA))
+      {
+         contents = String.format(jammertechniqueTemplate, data.pkg,
+            sisoSpecificationTitleDate, 
+            "284", // TODO huh?
+            // TODO kind, category
+            data.className,data.className);
+      }
+      else if (language.toLowerCase().equals(CSHARP) ||
+               language.toLowerCase().equals(CPP))
+      {
+        contents = String.format(jammertechniqueTemplate, data.pkg,
+            sisoSpecificationTitleDate, 
+            "284", // TODO huh?
+            // TODO kind, category
+            StringUtils.formatNamespaceStatement(currentNamespace, language),
+            data.className,data.className);
+      }
+
+      else if (language.toLowerCase().equals(PYTHON))
+      {
+        contents = String.format(jammertechniqueTemplate, data.pkg,
+            sisoSpecificationTitleDate, 
+            "284", // TODO huh?
+            // TODO kind, category
+            data.className);
+
+      }
+
+      if (language.toLowerCase().equals(PYTHON)) data.sb.append("\"\"\"\n");
       data.sb.append(licenseTemplate);
+      if (language.toLowerCase().equals(PYTHON)) data.sb.append("\"\"\"\n");
+
       data.sb.append(contents);
     }
 
     private void appendStatement(DescriptionElem elem, String typ, StringBuilder sb)
     {
-      String template = "        set" + typ + "((byte)%s); // %s\n";
-      sb.append(String.format(template, elem.value, elem.description));
+      String template = "";
+
+      switch (language.toLowerCase())
+      {
+        case JAVA:
+          template = "        set" + typ + "((byte)%s); // %s\n";        
+          break;
+
+        case CSHARP:
+          template = "            " + StringUtils.firstCharUpper(typ) + " = %s; // %s\n";
+          break;
+
+        case CPP:
+          template = "            " + IVAR_PREFIX + typ + " = %s; // %s\n";
+
+        case PYTHON:
+          template = StringUtils.tabs(2) + "self." + StringUtils.firstCharLower(typ) + " = %s // %s\n";
+          break;
+      }
+
+      if (!template.isEmpty())
+      {
+        sb.append(String.format(template, elem.value, elem.description));
+      }
     }
 
     private void writeKindFile(TypeClassData d)
     {
+
+      int indentLevel = 2;
+      if (language.toLowerCase().equals(JAVA)) indentLevel = 1;
+
       TypeClassData data = d;
       if (data == null) {
         data = buildJammerCommon(fixName(currentKind), currentKind);
-        appendStatement(currentKind, "Kind", data.sb);
-        saveJammerFile(data);
       }
+
+      currentNamespace = globalNamespace + "::jammers";
+      
+      appendCommonStatements(data);
+
+      appendStatement(currentKind, "Kind", data.sb);
+
+      if (!language.toLowerCase().equals(PYTHON))
+      {
+        data.sb.append(StringUtils.tabs(indentLevel) + "}\n");  // end the ctor decl
+        data.sb.append(StringUtils.tabs(indentLevel -1) + "}\n\n");    // end the class decl
+      }
+
+      if (!language.toLowerCase().equals(JAVA))
+      {
+        data.sb.append(StringUtils.formatNamespaceEndStatement(currentNamespace, language));
+      }
+
+      // data.sb.append(StringUtils.formatNamespaceEndStatement(globalNamespace, language));
+      saveJammerFile(data);
+
     }
 
     private void writeCategoryFile(TypeClassData d)
     {
+      int indentLevel = 2;
+      if (language.toLowerCase().equals(JAVA)) indentLevel = 1;
+
       TypeClassData data = d;
       if (data == null) {
         data = buildJammerCommon(fixName(currentCategory), currentCategory);
       }
+
+      currentNamespace = globalNamespace + "::jammers::" +
+                         StringUtils.firstCharLower(fixName(currentKind));
+
+
+      appendCommonStatements(data);
       appendStatement(currentKind, "Kind", data.sb);
       appendStatement(currentCategory, "Category", data.sb);
+
+      if(!language.toLowerCase().equals(PYTHON))
+      {
+        data.sb.append(StringUtils.tabs(indentLevel) + "}\n");
+        data.sb.append(StringUtils.tabs(indentLevel -1) + "}\n\n");
+      }
+      if (!language.toLowerCase().equals(JAVA))
+      {
+        data.sb.append(StringUtils.formatNamespaceEndStatement(currentNamespace, language));
+      }
 
       if (d == null) {
         saveJammerFile(data);
@@ -411,13 +581,29 @@ public class GenerateJammers
 
     private void writeSubCategoryFile(TypeClassData d)
     {
+      int indentLevel = 2;
+      if (language.toLowerCase().equals(JAVA)) indentLevel = 1;
+
       TypeClassData data = d;
       if (data == null) {
         data = buildJammerCommon(fixName(currentSubCategory), currentSubCategory);
       }
+      
+      appendCommonStatements(data);
       appendStatement(currentKind, "Kind", data.sb);
       appendStatement(currentCategory, "Category", data.sb);
       appendStatement(currentSubCategory, "SubCategory", data.sb);
+
+      if (!language.toLowerCase().equals(PYTHON))
+      {
+        data.sb.append(StringUtils.tabs(indentLevel) + "}\n");
+        data.sb.append(StringUtils.tabs(indentLevel -1) + "}\n\n");
+      }
+
+      if (!language.toLowerCase().equals(JAVA))
+      {
+        data.sb.append(StringUtils.formatNamespaceEndStatement(currentNamespace, language));
+      }
 
       if (d == null)
         saveJammerFile(data);
@@ -425,14 +611,30 @@ public class GenerateJammers
 
     private void writeSpecificFile(TypeClassData d) throws Exception
     {
+      int indentLevel = 2;
+      if (language.toLowerCase().equals(JAVA)) indentLevel = 1;
+
       TypeClassData data = d;
       if (data == null) {
         data = buildJammerCommon(fixName(currentSpecific), currentSpecific);
       }
+
+      appendCommonStatements(data);
       appendStatement(currentKind, "Kind", data.sb);
       appendStatement(currentCategory, "Category", data.sb);
       appendStatement(currentSubCategory, "SubCategory", data.sb);
       appendStatement(currentSpecific, "Specific", data.sb);
+
+      if (!language.toLowerCase().equals(PYTHON))
+      {
+        data.sb.append(StringUtils.tabs(indentLevel) + "}\n");
+        data.sb.append(StringUtils.tabs(indentLevel -1) + "}\n\n");
+      }
+      
+      if (!language.toLowerCase().equals(JAVA))
+      {
+        data.sb.append(StringUtils.formatNamespaceEndStatement(currentNamespace, language));
+      }
 
       if (d == null)
         saveJammerFile(data);
@@ -449,9 +651,34 @@ public class GenerateJammers
         data.directory.mkdirs();
 
         // Protect against duplicate class names
-        int i = 1;
-        while (new File(data.directory, fixedName + ".java").exists()) {
-          fixedName = fixedName + i++;
+        // only spans current kind, not other folders
+        if (language.toLowerCase().equals(JAVA))
+        {
+          int i = 1;
+          while (new File(data.directory, fixedName + ".java").exists()) {
+            fixedName = fixedName + i++;
+          }
+        }
+        else if (language.toLowerCase().equals(CSHARP))
+        {
+          int i = 1;
+          while (new File(data.directory, fixedName + ".cs").exists()) {
+            fixedName = fixedName + i++;
+          }
+        }
+        else if (language.toLowerCase().equals(CPP))
+        {
+          int i = 1;
+          while (new File(data.directory, fixedName + ".h").exists()) {
+            fixedName = fixedName + i++;
+          }
+        }
+        else if (language.toLowerCase().equals(PYTHON))
+        {
+          int i = 1;
+          while (new File(data.directory, fixedName + ".py").exists()) {
+            fixedName = fixedName + i++;
+          }
         }
 
         String pkg = packageName + "." + pathToPackage(data.sb.toString());
@@ -459,7 +686,7 @@ public class GenerateJammers
         data.className = fixedName;
         data.sb.setLength(0);
         
-        appendCommonStatements(data);
+        // appendCommonStatements(data);
         return data;
       }
       catch (Exception ex) {
@@ -470,11 +697,13 @@ public class GenerateJammers
 
   private void saveFile(File parentDir, String name, String contents)
   {
+    // System.out.println("Generating file " + name);
     // save file
     File target = new File(parentDir, name);
     try {
       target.createNewFile();
-      try (FileWriter fw = new FileWriter(target, StandardCharsets.UTF_8)) {
+      try (FileOutputStream fso = new FileOutputStream(target)) {
+        OutputStreamWriter fw = new OutputStreamWriter(fso, StandardCharsets.UTF_8);
         fw.write(contents);
         fw.flush();
       }
@@ -727,16 +956,32 @@ public class GenerateJammers
   }
 
   /** Command-line invocation (CLI)
+         <arg value="xml/SISO/${SISO-REF-010.xml}"/>
+         <arg value="src-generated/java/edu/nps/moves/dis7/jammers"/>
+         <arg value="edu.nps.moves.dis7.jammers"/>
+         <arg value="csharp"/>
     * @param args command-line arguments */
+
   public static void main(String[] args)
   {
+    sisoXmlFile         = args[0];
+    outputDirectoryPath = args[1];
+    packageName         = args[2];
+    if (args.length > 3)
+      language          = args[3];
+
+    System.out.println("GenerateJammers");
+    System.out.println("   sisoXmlFile : "         + sisoXmlFile);
+    System.out.println("   outputDirectoryPath : " + outputDirectoryPath);
+    System.out.println("   packageName : "         + packageName);
+    System.out.println("   language : "            + language);
+
     try {
-        if  (args.length == 0)
-             new GenerateJammers("",      "",      ""     ).run(); // use defaults
-        else new GenerateJammers(args[0], args[1], args[2]).run();
+        new GenerateJammers(sisoXmlFile, outputDirectoryPath, packageName, language).run();
     }
     catch (SAXException | IOException | ParserConfigurationException ex) {
       System.err.println(ex.getClass().getSimpleName() + ": " + ex.getLocalizedMessage());
+      ex.printStackTrace(System.err);
     }
   }
 }

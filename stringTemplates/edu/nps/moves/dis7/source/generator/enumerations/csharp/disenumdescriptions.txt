@@ -1,0 +1,7 @@
+    public class %s_Accessors
+    {
+        public static ConcurrentDictionary<%s, string> %s = 
+            new ConcurrentDictionary<%s, string>
+            (
+                new Dictionary<%s, string>
+                {

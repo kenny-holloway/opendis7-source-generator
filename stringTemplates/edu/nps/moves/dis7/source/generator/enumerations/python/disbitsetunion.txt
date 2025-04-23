@@ -1,0 +1,5 @@
+class %s(ctypes.Union):
+    _fields_ = [
+        ("capabilities", %sBitField),
+        ("asbyte", UInt8)
+    ]

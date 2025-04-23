@@ -1,0 +1,5 @@
+    def set_%s(self, value : %s):
+        self.capabilities._%s = int(value)
+    def get_%s(self) -> %s:
+        return %s
+    %s = property(get_%s, set_%s)

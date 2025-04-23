@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2008-2023, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
+ * Copyright (c) 2008-2025, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
  * This work is provided under a BSD open-source license, see project license.html and license.txt
  */
 package edu.nps.moves.dis7.source.generator.pdus;
@@ -103,6 +103,9 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
     
     /** As we parse the XML document, this is the current attribute */
     private GeneratedClassAttribute currentClassAttribute = null;
+
+    /** As we parse the XML, lets hold the classAttribute from the object list so we can set the underlying type */
+    private GeneratedClassAttribute currentListAttribute =  new GeneratedClassAttribute();
     
     // The languages may have language-specific properties, such as libraries that they
     // depend on. Each language has its own set of properties.
@@ -123,7 +126,7 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
     Properties javascriptProperties = new Properties();
 
     /** source code generation options */
-//    Properties sourceGenerationOptions;
+    Properties sourceGenerationOptions;
     
     /** source code generation for python */
     Properties pythonProperties = new Properties();
@@ -132,19 +135,21 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
     private Set<String> primitiveTypes = new HashSet<>();
     
     /** Directory in which the java class package is created */
-//    private String javaDirectory = null;
+    private String javaDirectory = null;
     
     /** Directory in which the C++ classes are created */
-//    private String cppDirectory = null;
+    private String cppDirectory = null;
     
     //PES
     /** Directory in which the C# classes are created */
-//    private String csharpDirectory = null;
+    private String csharpDirectory = null;
 
     /** Director in which the objc classes are created */
-//    private String objcDirectory = null;
+    private String objcDirectory = null;
     
     private int classCount = 0;   
+
+    private boolean processingListObject = false;
    
     /**
      * Create a new collection of Java objects by reading an XML file; these
@@ -168,13 +173,21 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
             System.out.println(e);
         }
 
+        // System.out.println("GeneratePdusForGivenLanguage class list:\n");
+        // for (GeneratedClass aClass : generatedClassNames.values())
+        // {
+        //     System.out.println("Listing class " + aClass.getName());
+        // }
+
         // This does at least a cursory santity check on the data that has been read in from XML
         // It is far from complete.
-        if (!this.abstractSyntaxTreeIsPlausible()) {
-            System.out.println("The generated XML file is not internally consistent according to astIsPlausible()");
-            System.out.println("There are one or more errors in the XML file. See output for details.");
-            System.exit(1);
-        }
+        // if (!this.abstractSyntaxTreeIsPlausible()) {
+        //     System.out.println("The generated XML file is not internally consistent according to astIsPlausible()");
+        //     System.out.println("There are one or more errors in the XML file. See output for details.");
+        //     System.exit(1);
+        // }
+
+        // generatedClassNames.put("PduStatus", new GeneratedClass());
 
         switch (languageToGenerate.toLowerCase()) {
             case JAVA:
@@ -252,7 +265,7 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
         checkArguments(sisoXmlFile, programmingLanguage);
         
         GeneratePdusForGivenLanguage generatePdusResult = new GeneratePdusForGivenLanguage(sisoXmlFile, programmingLanguage);  // includes simple list of PDUs
-        System.out.println (generatePdusResult.getClass().getName() + " complete.");
+        System.out.println (GeneratePdusForGivenLanguage.class.getName() + " complete.");
     }
     
     /**
@@ -272,8 +285,8 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
                  language.equalsIgnoreCase(OBJC)       || language.equalsIgnoreCase(CSHARP) ||
                  language.equalsIgnoreCase(JAVASCRIPT) || language.equalsIgnoreCase(PYTHON) ))
             {
-                System.err.println("Not a valid language to generate. The options are java (supported), python (testing), and cpp, csharp, javascript and objc");
-                System.err.println("Usage: GeneratePdus xmlFile language"); // formerly xmlpg
+                System.out.println("Not a valid language to generate. The options are java (supported), python (testing), and cpp, csharp, javascript and objc");
+                System.out.println("Usage: GeneratePdus xmlFile language"); // formerly xmlpg
                 System.exit(-1);
             }
         }
@@ -373,6 +386,7 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
                 //System.out.println("----Looking for matches of inital value " + anInitialValue.getVariable());
                 while(currentClass != null)
                 {
+                    List attributesForCurruentClass = currentClass.getClassAttributes();
                     for(GeneratedClassAttribute anAttribute : currentClass.getClassAttributes()) {
                         //System.out.println("--checking " + anAttribute.getName() + " against inital value " + anInitialValue.getVariable());
                         if(anInitialValue.getVariable().equals(anAttribute.getName()))
@@ -437,14 +451,20 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
                     break;
                 case PYTHON:
                     props = pythonProperties;
-                    break;      
+                    break;
             }
             if(props != null)
               for(int idx = 0; idx < attributes.getLength(); idx++) {
                   props.setProperty(attributes.getQName(idx), attributes.getValue(idx));
               }
+//  System.out.println("    ++ startElement");
+//  System.out.println("          Qname : " + qName.toLowerCase());
+//  System.out.println("           name : " + attributes.getValue("name"));
+//  System.out.println("        comment : " + attributes.getValue("comment"));
+// System.out.println("           name : " + attributes.getValue("name"));
 
             switch (qName.toLowerCase()) {
+
                 case CLASS:                  
                     handleClass(attributes);
                     break;
@@ -486,13 +506,16 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
                     break;
                     
                 case OBJECTLIST:
+                    processingListObject = true;
                     handleObjectList(attributes);
                     break;
 
                 case PRIMITIVELIST:
+                    processingListObject = true;
                     handlePrimitiveList(attributes);
                     break;
             }
+            // System.out.println("    -- startElement");
         } // end of startElement
         
         @Override
@@ -668,6 +691,13 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
          
             currentClassAttribute.setUnderlyingTypeIsPrimitive(true);
 
+            if (processingListObject == true)
+            {
+                //Add the kind to the list type
+                currentListAttribute.underlyingKind = GeneratedClassAttribute.ClassAttributeType.PRIMITIVE;
+                processingListObject = false;
+            }
+
             for (int idx = 0; idx < attributes.getLength(); idx++) {
                 switch (attributes.getQName(idx).toLowerCase()) {
                     case TYPE:
@@ -682,12 +712,21 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
         
         private void handleClassRef(Attributes attributes)
         {
+            if (processingListObject == true)
+            {
+                //Add the kind to the list type
+                currentListAttribute.underlyingKind = GeneratedClassAttribute.ClassAttributeType.CLASSREF;
+                processingListObject = false;
+            }
+
             // The classref may occur inside a List element; if that's the case, we want to 
             // respect the existing list type.
             if (currentClassAttribute.getAttributeKind() == GeneratedClassAttribute.ClassAttributeType.UNSET) {
                 currentClassAttribute.setAttributeKind(GeneratedClassAttribute.ClassAttributeType.CLASSREF);
                 currentClassAttribute.setUnderlyingTypeIsPrimitive(false);
             }
+            else if (currentClassAttribute.getAttributeKind() == GeneratedClassAttribute.ClassAttributeType.SISO_ENUM)
+                currentClassAttribute.setUnderlyingTypeIsEnum(true);
 
             for (int idx = 0; idx < attributes.getLength(); idx++) {
                 switch (attributes.getQName(idx).toLowerCase()) {
@@ -706,21 +745,42 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
         
         private void handleSisoEnum(Attributes attributes)
         {
+            currentClassAttribute.setUnderlyingTypeIsEnum(true);
+
             if (currentClassAttribute.getAttributeKind() == GeneratedClassAttribute.ClassAttributeType.UNSET) {
                 currentClassAttribute.setAttributeKind(GeneratedClassAttribute.ClassAttributeType.SISO_ENUM);
                 currentClassAttribute.setUnderlyingTypeIsPrimitive(false);
             }
-            else
-                currentClassAttribute.setUnderlyingTypeIsEnum(true);
+
+            if (processingListObject == true)
+            {
+                //Add the kind to the list type
+                currentListAttribute.underlyingKind = GeneratedClassAttribute.ClassAttributeType.SISO_ENUM;
+                processingListObject = false;
+            }
 
             for (int idx = 0; idx < attributes.getLength(); idx++) {
                 String attributeName = attributes.getQName(idx);
-                switch (attributeName.toLowerCase()) {
+
+                String flagName = null;
+
+                switch (attributes.getQName(idx).toLowerCase()) {
+                    case NAME:
+                        flagName = attributes.getValue(idx);
+                        break;
                     case TYPE:
                         currentClassAttribute.setType(attributes.getValue(idx));
                         break;
                     case COMMENT:
                         String s = currentClassAttribute.getComment();
+
+                        // if comment starts with uid x, lets pull the uid value for later alias lookups
+                        String attributeComment = attributes.getValue("comment").toLowerCase();
+                        if (attributeComment.indexOf("uid") != -1)
+                        {
+                            attributeComment = attributeComment.replaceAll("uid", "").replaceAll("\\s", "");
+                            currentClassAttribute.setUnderlyingUid(attributeComment);
+                        }
                         currentClassAttribute.setComment((s==null?"":s)+" "+attributes.getValue(idx));
                         break;
                     case DEFAULTVALUE:
@@ -737,6 +797,15 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
                 currentClassAttribute.setUnderlyingTypeIsPrimitive(false);
             }
 
+            if (processingListObject == true)
+            {
+                //Add the kind to the list type
+                currentListAttribute.underlyingKind = GeneratedClassAttribute.ClassAttributeType.SISO_BITFIELD;
+                processingListObject = false;
+            }
+
+            currentClassAttribute.setIsBitField(true);
+
             for (int idx = 0; idx < attributes.getLength(); idx++) {
                 String nm = attributes.getQName(idx);
                 switch (nm.toLowerCase()) {
@@ -745,6 +814,13 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
                         break;
                     case COMMENT:
                         String s = currentClassAttribute.getComment();
+                        // if comment starts with uid x, lets pull the uid value for later alias lookups
+                        String attributeComment = attributes.getValue("comment").toLowerCase();
+                        if (attributeComment.indexOf("uid") != -1)
+                        {
+                            attributeComment = attributeComment.replaceAll("uid", "").replaceAll("\\s", "");
+                            currentClassAttribute.setUnderlyingUid(attributeComment);
+                        }
                         currentClassAttribute.setComment((s==null?"":s)+" "+attributes.getValue(idx));
                         break;
                     case DEFAULTVALUE:
@@ -779,13 +855,30 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
                 }
             }
         }
-       
+/*       
+    <attribute name="mineLocation" comment="Mine locations">
+        <objectlist countFieldName="numberOfMinesInThisPdu">
+            <classRef name="Vector3Float"/>
+        </objectlist>
+    </attribute>
+*/
         private void handleObjectList(Attributes attributes)
         {
+            // processingListObject = true;
             currentClassAttribute.setAttributeKind(GeneratedClassAttribute.ClassAttributeType.OBJECT_LIST);
+
+            currentListAttribute = currentClassAttribute;
+
             for (int idx = 0; idx < attributes.getLength(); idx++) {
                 // Variable list length fields require a name of another field that contains how many
                 // list items there are. This is used in unmarshalling.
+                if (attributes.getQName(idx).equalsIgnoreCase(TYPE))
+                {
+                    // Could this be the type of the data in the object list?
+                    System.out.println("QNAME TYPE : " + attributes.getValue(idx));
+                }
+
+                // if(kindOfNode == GeneratedClassAttribute.ClassAttributeType.CLASSREF)
                 if (attributes.getQName(idx).equalsIgnoreCase(COUNTFIELDNAME)) {
                     currentClassAttribute.setCountFieldName(attributes.getValue(idx));
 
@@ -838,11 +931,12 @@ public class GeneratePdusForGivenLanguage  // TODO rename? perhaps GeneratePdusB
     private void handlePrimitiveList(Attributes attributes)
     {
         currentClassAttribute.setAttributeKind(GeneratedClassAttribute.ClassAttributeType.PRIMITIVE_LIST);
+        currentListAttribute = currentClassAttribute;
 
         for (int idx = 0; idx < attributes.getLength(); idx++) 
         {
             String attributeName = attributes.getQName(idx).toLowerCase();
-            switch (attributeName.toLowerCase())
+            switch (attributes.getQName(idx).toLowerCase())
             {
                 case COULDBESTRING:
                     if (attributes.getValue(idx).equalsIgnoreCase(TRUE))

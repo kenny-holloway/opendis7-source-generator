@@ -1,0 +1,15 @@
+        public static Int32 GetMarshaledSize(%s enumValue)
+        { 
+            return sizeof(%s);
+        }
+
+        public static void Marshal(%s.DataStream ds, %s enumValue)
+        {
+            byte[] byteData = BitConverter.GetBytes((%s)enumValue);
+            ds.Stream.Write(byteData, 0, byteData.Length);
+        }
+
+        public static void Unmarshal(%s.DataStream ds, ref %s enumValue)
+        {
+            enumValue = (%s)ds.Stream.ReadByte();
+        }

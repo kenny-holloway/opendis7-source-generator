@@ -1,0 +1,8 @@
+#include <algorithm>
+#include <unordered_map>
+
+#include <dis/enumerations/%s.h>
+
+using namespace %s;
+// using UID_%s = %s;
+

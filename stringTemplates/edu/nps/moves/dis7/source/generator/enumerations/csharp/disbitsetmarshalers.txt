@@ -1,0 +1,28 @@
+        
+        public Int32 GetMarshaledSize()
+        {
+            return sizeof(Int32);
+        }
+
+        public void Marshal(DataOutputStream dos)
+        {
+            Marshal(dos.DS);
+        }
+
+        public void Marshal(DataStream ds)
+        {
+            byte[] byteData = BitConverter.GetBytes(%s.Data);
+            ds.Stream.Write(byteData, 0, byteData.Length);
+        }
+
+        public void Unmarshal(DataInputStream dataInputStream)
+        {
+           Unmarshal(dataInputStream.DS);
+        }
+
+        public void Unmarshal(DataStream ds)
+        {
+            byte[] byteData = new byte[sizeof(int)];
+            ds.Stream.Read(byteData, 0, sizeof(int));
+            %s = new BitVector32(BitConverter.ToInt32(byteData,0));
+        }

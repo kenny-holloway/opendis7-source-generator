@@ -1,0 +1,5 @@
+        public static string GetDescription(%s enumValue)
+        {
+            var description = %s[enumValue];
+            return description;
+        }

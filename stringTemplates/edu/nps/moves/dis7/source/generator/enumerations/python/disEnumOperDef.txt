@@ -1,0 +1,23 @@
+    @staticmethod
+    def describe(self):
+        return self.name, self.value
+
+    @classmethod
+    def value_list(cls):
+        return list(map(lambda c: c.value, cls))
+
+    @classmethod
+    def _missing_(cls, value):
+        return cls.default
+
+    @classmethod
+    def get_enum_key(cls, value:int) -> str:
+        return list(OrderedDict(%s.__members__).keys())[value+1]
+
+    @classmethod
+    def get_enum(cls, value:int) -> Enum:
+        key = cls.get_enum_key(value)
+        return getattr(cls, key)
+
+    def __int__(self):
+        return self.value[0]

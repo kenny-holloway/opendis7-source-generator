@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2008-2023, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
+ * Copyright (c) 2008-2025, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
  * This work is provided under a BSD open-source license, see project license.html and license.txt
  */
 
@@ -8,6 +8,8 @@ package edu.nps.moves.dis7.source.generator.entityTypes;
 import edu.nps.moves.dis7.source.generator.enumerations.GenerateEnumerations;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -64,10 +66,10 @@ public class GenerateObjectTypes
         if (!outputDir.isEmpty())
             outputDirectoryPath = outputDir;
         if (!packageName.isEmpty())
-           GenerateObjectTypes.packageName = packageName;
+           this.packageName = packageName;
         System.out.println (GenerateObjectTypes.class.getName());
         System.out.println ("              xmlFile=" + sisoXmlFile);
-        System.out.println ("          packageName=" + GenerateObjectTypes.packageName);
+        System.out.println ("          packageName=" + this.packageName);
         System.out.println ("  outputDirectoryPath=" + outputDirectoryPath);
         
         outputDirectory  = new File(outputDirectoryPath);
@@ -79,10 +81,12 @@ public class GenerateObjectTypes
         packageInfoPath = outputDirectoryPath + "/" + "package-info.java";
         packageInfoFile = new File(packageInfoPath);
         
-        FileWriter packageInfoFileWriter;
+        OutputStreamWriter packageInfoFileWriter;
+        FileOutputStream fso;
         try {
             packageInfoFile.createNewFile();
-            packageInfoFileWriter = new FileWriter(packageInfoFile, StandardCharsets.UTF_8);
+            fso = new FileOutputStream(packageInfoFile);
+            packageInfoFileWriter = new OutputStreamWriter(fso, StandardCharsets.UTF_8);
             packageInfoBuilder = new StringBuilder();
             packageInfoBuilder.append("/**\n");
             packageInfoBuilder.append(" * Object type infrastructure classes for ").append(sisoSpecificationTitleDate).append(" enumerations.\n");
@@ -136,7 +140,7 @@ public class GenerateObjectTypes
   {
     try {
       licenseTemplate          = loadOneTemplate("../pdus/dis7javalicense.txt");
-      objecttypeTemplate       = loadOneTemplate("objecttype.txt");
+      objecttypeTemplate       = loadOneTemplate("../entitytypes/objecttype.txt");
     }
     catch (Exception ex) {
       throw new RuntimeException(ex);
@@ -154,7 +158,7 @@ public class GenerateObjectTypes
 
     String packageFromDescription;
     String enumFromDescription;
-    List<DescriptionElem> children = new ArrayList<>();
+    ArrayList<DescriptionElem> children = new ArrayList<>();
   }
 
   class CotElem extends DescriptionElem
@@ -339,10 +343,12 @@ public class GenerateObjectTypes
       
         if (!packageInfoFile.exists()) // write package-info.java during first time through
         {
-            FileWriter packageInfoFileWriter;
+          OutputStreamWriter packageInfoFileWriter;
+            FileOutputStream fso;
             try {
                 packageInfoFile.createNewFile();
-                packageInfoFileWriter = new FileWriter(packageInfoFile, StandardCharsets.UTF_8);
+                fso = new FileOutputStream(packageInfoFile);
+                packageInfoFileWriter = new OutputStreamWriter(fso, StandardCharsets.UTF_8);
                 packageInfoBuilder = new StringBuilder();
                 packageInfoBuilder.append("/**\n");
                 packageInfoBuilder.append(" * Object type infrastructure classes for ").append(sisoSpecificationTitleDate).append(" enumerations.\n");
@@ -499,7 +505,8 @@ public class GenerateObjectTypes
     File target = new File(parentDir, name);
     try {
       target.createNewFile();
-      try (FileWriter fw = new FileWriter(target, StandardCharsets.UTF_8)) {
+      try (FileOutputStream  fso = new FileOutputStream(target);) {
+        OutputStreamWriter fw = new OutputStreamWriter(fso, StandardCharsets.UTF_8);
         fw.write(contents);
         fw.flush();
       }
@@ -776,7 +783,8 @@ public class GenerateObjectTypes
     try {
         if  (args.length == 0)
              new GenerateObjectTypes("",      "",      ""     ).run(); // use defaults
-        else new GenerateObjectTypes(args[0], args[1], args[2]).run();
+        else 
+             new GenerateObjectTypes(args[0], args[1], args[2]).run();
     }
     catch (SAXException | IOException | ParserConfigurationException ex) {
       System.err.println(ex.getClass().getSimpleName() + ": " + ex.getLocalizedMessage());

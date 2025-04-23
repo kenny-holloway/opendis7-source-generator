@@ -1,0 +1,3 @@
+    static const std::string notFound = "Not Found";
+    const auto itr = %s.find(dictionaryElement);
+    return (itr == %s.end()) ? notFound : itr->second;

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2008-2023, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
+ * Copyright (c) 2008-20252, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
  * This work is provided under a BSD open-source license, see project license.html and license.txt
  */
 
@@ -91,9 +91,9 @@ public class GenerateOpenDis7JavaPackages
         {
             System.out.println("------------- opendis7-python generation commence -------------");
             
-//            GeneratePdusForGivenLanguage generatePdusForGivenLanguage = new GeneratePdusForGivenLanguage(DEFAULT_SISO_XML_FILE, whichLanguage);
+            GeneratePdusForGivenLanguage generatePdusForGivenLanguage = new GeneratePdusForGivenLanguage(DEFAULT_SISO_XML_FILE, whichLanguage);
             
-            GeneratePdusForGivenLanguage.main(new String[]{DEFAULT_SISO_XML_FILE, whichLanguage});
+            generatePdusForGivenLanguage.main(new String[]{DEFAULT_SISO_XML_FILE, whichLanguage});
             
             System.out.println("------------- opendis7-python generation complete -------------");
         }

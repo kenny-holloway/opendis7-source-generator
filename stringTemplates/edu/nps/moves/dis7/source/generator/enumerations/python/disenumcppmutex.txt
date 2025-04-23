@@ -1,0 +1,8 @@
+#if __cplusplus >= 201703L // C++17
+using mutex = std::shared_mutex;
+#elseif __cplusplus >= 201402L // C++14
+using mutex = std::shared_timed_mutex;
+#else
+using mutex = std::mutex;
+#endif
+static mutex %s_mutex;

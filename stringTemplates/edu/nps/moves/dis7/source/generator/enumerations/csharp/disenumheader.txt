@@ -1,0 +1,18 @@
+void add_custom_value(%s %s, const std::string& name);
+bool is_valid(%s %s);
+const std::string& get_description(%s %s);
+std::string to_string(%s enumValue);
+
+// Thread safe methods
+void concurrent_add_custom_value(%s enumValue, const std::string& name);
+bool concurrent_is_valid(%s enumValue);
+const std::string& concurrent_get_description(%s enumValue);
+std::string concurrent_to_string(%s enumValue);
+
+std::ostream& operator<<(std::ostream& os, %s enumValue);
+
+dis::DataStream& operator <<(dis::DataStream &ds, %s enumValue);
+%s& operator>>(dis::DataStream& ds, %s& enumValue);
+int get_marshaled_size(%s enumValue);
+void marshal(dis::DataStream& ds, %s enumValue);
+void unmarshal(dis::DataStream& ds, %s& enumValue);

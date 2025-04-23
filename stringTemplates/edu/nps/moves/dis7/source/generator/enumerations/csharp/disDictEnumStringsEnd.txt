@@ -1,0 +1,14 @@
+    const auto index = static_cast<size_t>(std::min(%s, %s::%s));
+    return std::string(names[index]);
+}
+
+//%s GetEnumByIndex(int value)
+//{
+   //return std::min(static_cast<%s>(value), %s::%s);
+//}
+
+std::ostream& operator<<(std::ostream& os, %s %s)
+{
+   os << dis::siso_ref_010::enums::to_string(%s);
+   return os;
+}

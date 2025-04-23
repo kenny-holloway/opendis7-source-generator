@@ -1,0 +1,2 @@
+    const auto index = static_cast<size_t>(std::min(ek, EntityKind::invalid));
+    return std::string(names[index]);

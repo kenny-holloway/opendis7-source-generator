@@ -1,0 +1,10 @@
+#ifndef %s_H
+#define %s_H
+
+#include <string>
+#include <cstdint>
+#include <unordered_map>
+
+#include <dis/utils/DataStream.h>
+
+#define enumToString( name ) #name

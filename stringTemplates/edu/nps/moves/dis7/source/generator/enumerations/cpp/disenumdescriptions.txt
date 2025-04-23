@@ -1,0 +1,3 @@
+
+    static std::unordered_map<%s, std::string> %s = 
+    {

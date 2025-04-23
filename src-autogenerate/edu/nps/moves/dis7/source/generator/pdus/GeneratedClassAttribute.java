@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2008-2023, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
+ * Copyright (c) 2008-2025, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
  * This work is provided under a BSD open-source license, see project license.html and license.txt
  */
 package edu.nps.moves.dis7.source.generator.pdus;
@@ -13,13 +13,13 @@ import java.util.*;
  *
  * @author DMcG
  */
+
 public class GeneratedClassAttribute // TODO consider refactor renaming as GeneratedClassAttribute
 {
     /** default constructor */
     public GeneratedClassAttribute()
     {
     }
-    
     /**
      * The various things an attribute can be: a primitive type (int, short, byte, etc), 
      * a reference to another class defined in this document, a list of primitives, aka
@@ -96,6 +96,9 @@ public class GeneratedClassAttribute // TODO consider refactor renaming as Gener
      */
     protected String defaultValue = null;
     
+    // For an object or primitive list attribute what kind is the list made of?
+    protected ClassAttributeType underlyingKind = ClassAttributeType.UNSET;
+
     /** If this is a list of some sort, this is true if the list consists of primitives, false if the list 
      * consists of classes
      */
@@ -110,6 +113,8 @@ public class GeneratedClassAttribute // TODO consider refactor renaming as Gener
      * consists of primitives
      */    
     protected boolean underlyingTypeIsEnum = false;
+
+    protected String underlyingUid = "";
     
     
     /** Some fields, such as Marking, could have arrays that are treated a C strings. At least on the set
@@ -125,6 +130,8 @@ public class GeneratedClassAttribute // TODO consider refactor renaming as Gener
 
     /** List of bit fields. */
     protected List<GeneratedBitField> bitFieldList = new ArrayList<>();
+
+    
     
     /** Should we serialize this attribute to the message or not? By default yes, but
      * this can be overridden by the attribute serialize="false" in the xml
@@ -355,6 +362,21 @@ public class GeneratedClassAttribute // TODO consider refactor renaming as Gener
     {
         return underlyingTypeIsEnum;
     }
+
+    public void setUnderlyingUid(String newValue)
+    {
+        underlyingUid = newValue;
+    }
+
+    public String getUnderlyingUid()
+    {
+        return underlyingUid;
+    }
+
+    public ClassAttributeType getUnderlyingKind()
+    {
+        return underlyingKind;
+    }
     
     /**
      * whether attribute could be string
@@ -470,6 +492,44 @@ public class GeneratedClassAttribute // TODO consider refactor renaming as Gener
     public void setEnumMarshalSize(String enumMarshalSize)
     {
         this.enumMarshalSize = enumMarshalSize;
+    }
+
+    public String ToString(String... indent)
+    {
+        String tabs = "";
+        if (indent.length > 0)
+            tabs += indent[0];
+
+        String stringValue = "";
+        stringValue += tabs + "///            Name : " + getName() + "\n";
+        stringValue += tabs + "///             UID : " + underlyingUid + "\n";
+        stringValue += tabs + "///            Type : " + getType() + "\n";
+        stringValue += tabs + "///            Kind : " + getAttributeKind() + "\n";
+        stringValue += tabs + "///    Marshal Size : " + getEnumMarshalSize() + "\n";
+        stringValue += tabs + "///         Comment : " + getComment() + "\n";
+        stringValue += tabs + "///   default value : " + getDefaultValue()  + "\n";
+        stringValue += tabs + "///     is Bitfield : " + isBitField  + "\n";
+        stringValue += tabs + "///     List Length : " + getListLength() + "\n";
+        stringValue += tabs + "///     Prim Length : " + getIsPrimitiveListLengthField() + "\n";
+        stringValue += tabs + "///      Dyn Length : " + getIsDynamicListLengthField() + "\n";
+        
+        if (getIsDynamicListLengthField() == true)
+        {
+            stringValue += tabs + "///    dynamic Attr : " + getDynamicListClassAttribute().getType() + "\n";
+        }
+
+        stringValue += tabs + "/// Underlying Kind : " + getUnderlyingKind() + "\n";
+        stringValue += tabs + "/// underlying Type : ";
+        if (underlyingTypeIsClass)
+            stringValue += "IsClass";
+        else if (underlyingTypeIsEnum)
+            stringValue += "IsEnum";
+        else
+            stringValue += "N/A";
+        
+        // stringValue += "\n";
+
+        return stringValue;
     }
     
 }

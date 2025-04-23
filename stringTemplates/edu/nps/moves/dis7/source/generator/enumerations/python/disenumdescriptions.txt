@@ -1,0 +1,3 @@
+    @staticmethod
+    def GetDescritpion(value : IntEnum) -> str:
+        %s = {

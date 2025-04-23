@@ -1,22 +1,28 @@
 /**
- * Copyright (c) 2008-2023, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
+ * Copyright (c) 2008-2025, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
  * This work is provided under a BSD open-source license, see project license.html and license.txt
  */
 package edu.nps.moves.dis7.source.generator.entityTypes;
 
 import edu.nps.moves.dis7.source.generator.enumerations.GenerateEnumerations;
-import java.io.BufferedWriter;
+import edu.nps.moves.dis7.source.generator.enumerations.StringUtils;
+
+import java.io.*;
+import java.util.*;
+import java.util.regex.*;
+
 import java.io.File;
 import java.io.FileWriter;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
 import java.io.IOException;
+
+import java.util.regex.Pattern;
+
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParserFactory;
 import org.xml.sax.Attributes;
@@ -33,6 +39,51 @@ import org.xml.sax.helpers.DefaultHandler;
  */
 public class GenerateEntityTypes
 {
+
+    class EnumElem
+    {
+        String uid;
+        String name;
+        String size;
+        String footnote;
+        List<EnumRowElem> elems                 = new ArrayList<>();
+    } 
+
+    class EnumRowElem
+    {
+        String value;
+        String description;
+        String name;
+        String footnote;
+        String xrefclassuid;
+
+        public String toString()
+        {
+          String stringValue = "";
+          stringValue += "        Name : " + name + "\n";
+          stringValue += "       Value : " + value + "\n";
+          stringValue += " description : " + description + "\n";
+          stringValue += "    footnote : " + footnote + "\n";
+          stringValue += "xrefclassuid : " + xrefclassuid + "\n";
+          return stringValue;
+        }
+    }
+
+    static List<EnumRowElem> countryEnums = new ArrayList();
+    static List<EnumRowElem> entityKindEnums = new ArrayList();
+
+    static List<EnumRowElem> platformDomainEnums = new ArrayList();
+    static List<EnumRowElem> munitionDomainEnums = new ArrayList();
+    static List<EnumRowElem> supplyDomainEnums = new ArrayList();
+
+    Map<String, List<EnumRowElem>> enumMap = new HashMap<String, List<EnumRowElem>>();
+      // enumMap.put("Country", countryEnums);
+      // enumMap.put("EntityKind", entityKindEnums);
+      // enumMap.put("PlatformDomain", platformDomainEnums);
+      // enumMap.put("MunitionDomain", munitionDomainEnums);
+      // enumMap.put("SupplyDomain", supplyDomainEnums);
+
+
     // set defaults to allow direct run
     private        File   outputDirectory;
     private static String outputDirectoryPath = "src-generated/java/edu/nps/moves/dis7/entityTypes"; // default
@@ -40,6 +91,17 @@ public class GenerateEntityTypes
     private static String            language = edu.nps.moves.dis7.source.generator.GenerateOpenDis7JavaPackages.DEFAULT_PROGRAMMING_LANGUAGE;
     private static String         sisoXmlFile = edu.nps.moves.dis7.source.generator.GenerateOpenDis7JavaPackages.DEFAULT_SISO_XML_FILE;
     private static String       sisoSpecificationTitleDate = "";
+
+    String globalNamespace = "";
+    String enumNamespace = "";
+    String currentNamespace = "";
+
+    /** String constant */ public static final String JAVA = "java";
+    /** String constant */ public static final String CPP = "cpp";
+    /** String constant */ public static final String OBJC = "objc";
+    /** String constant */ public static final String CSHARP = "csharp";
+    /** String constant */ public static final String JAVASCRIPT = "javascript";
+    /** String constant */ public static final String PYTHON = "python";
 
     private BufferedWriter uid2ClassWriter = null;
 
@@ -66,6 +128,24 @@ public class GenerateEntityTypes
       private String entityDomainValue;
     //private String domainPrettyName;
       private String entityUid;
+
+      public String toString()
+      {
+        String out = "\n";
+
+        out += "         fullName : \n" + fullName + "\n";
+        out += "        className : " + className + "\n";
+        out += "      countryName : " + countryName + "\n";
+        out += "countryNamePretty : " + countryNamePretty + "\n";
+        out += "     countryValue : " + countryValue + "\n";
+        out += "   entityKindName : " + entityKindName + "\n";
+        out += "  entityKindValue : " + entityKindValue + "\n";
+        out += " entityDomainName : " + entityDomainName + "\n";
+        out += "entityDomainValue : " + entityDomainValue + "\n";
+        out += "        entityUid : " + entityUid + "\n";
+
+        return out;
+      }
     }
     
     private String        packageInfoPath;
@@ -76,7 +156,7 @@ public class GenerateEntityTypes
      * @param xmlFile sisoXmlFile
      * @param outputDir outputDirectoryPath
      * @param packageName key to package name for entity types */
-  public GenerateEntityTypes(String xmlFile, String outputDir, String packageName)
+  public GenerateEntityTypes(String xmlFile, String outputDir, String packageName, String languageToGenerate)
   {
         if (!xmlFile.isEmpty())
              sisoXmlFile = xmlFile;
@@ -84,54 +164,75 @@ public class GenerateEntityTypes
             outputDirectoryPath = outputDir;
         if (!packageName.isEmpty())
            GenerateEntityTypes.packageName = packageName;
+        if (!languageToGenerate.isEmpty())
+          language = languageToGenerate;
+
+        Properties systemProperties = System.getProperties();
+        globalNamespace = systemProperties.getProperty("xmlpg.namespace");
+          if (globalNamespace == null)
+              globalNamespace = "";
+
+          // set global namespace for enums
+          enumNamespace = systemProperties.getProperty("xmlpg.enumNamespace");
+          if (enumNamespace == null)
+              enumNamespace = "";
+
         System.out.println (GenerateEntityTypes.class.getName());
         System.out.println ("              xmlFile=" + sisoXmlFile);
         System.out.println ("          packageName=" + GenerateEntityTypes.packageName);
         System.out.println ("  outputDirectoryPath=" + outputDirectoryPath);
+        System.out.println ("             language=" + language);
+        System.out.println("             namespace= " + globalNamespace);
+        System.out.println("        enum namespace= " + enumNamespace);
         
         outputDirectory  = new File(outputDirectoryPath);
         outputDirectory.mkdirs();
 //      FileUtils.cleanDirectory(outputDirectory); // do NOT clean directory, results can co-exist with other classes
         System.out.println ("actual directory path=" + outputDirectory.getAbsolutePath());
         
-        packageInfoPath = outputDirectoryPath + "/" + "package-info.java";
-        packageInfoFile = new File(packageInfoPath);
-        
-        FileWriter packageInfoFileWriter;
-        try {
-            packageInfoFile.createNewFile();
-            packageInfoFileWriter = new FileWriter(packageInfoFile, StandardCharsets.UTF_8);
-            packageInfoBuilder = new StringBuilder();
-            packageInfoBuilder.append("/**\n");
-            packageInfoBuilder.append(" * The <code>entities</code>  packages provide a large number of autogenerated utility classes for world entities of interest.");
-            packageInfoBuilder.append("\n");
-            packageInfoBuilder.append(" * <p> Online references: </p>\n");
-            packageInfoBuilder.append(" * <ul>\n");
-            packageInfoBuilder.append(" *      <li> GitHub <a href=\"https://github.com/open-dis/open-dis7-java\" target=\"_blank\">open-dis7-java library</a> </li> \n");
-            packageInfoBuilder.append(" *      <li> NPS <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/examples/src/OpenDis7Examples\" target=\"MV3500\">MV3500 Distributed Simulation Fundamentals course examples</a> </li> \n");
-            packageInfoBuilder.append(" *      <li> <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/specifications/README.md\" target=\"README.MV3500\">IEEE and SISO specification references</a> of interest</li> \n");
-            packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostandards.org/page/ReferenceDocuments\" target=\"SISO-REF-010\" >SISO-REF-010-2024 (v34) Reference for Enumerations for Simulation Interoperability</a> </li> \n");
-            packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostandards.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=47284\" target=\"SISO-REF-10.1\">SISO-REF-10.1-2019 Reference for Enumerations for Simulation, Operations Manual</a></li>\n");
-            packageInfoBuilder.append(" *      <li> <a href=\"https://savage.nps.edu/open-dis7-java/javadoc\" target=\"_blank\">open-dis7 Javadoc</a>, <a href=\"https://savage.nps.edu/open-dis7-java/xml/DIS_7_2012.autogenerated.xsd\" target=\"_blank\">open-dis7 XML Schema</a>and <a href=\"https://savage.nps.edu/open-dis7-java/xml/SchemaDocumentation\" target=\"_blank\">open-dis7 XML Schema documentation</a></li> </ul>\n");
-            packageInfoBuilder.append("\n");
-            packageInfoBuilder.append(" * @see java.lang.Package\n");
-            packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful\">Stack Overflow: why-is-package-info-java-useful</a>\n");
-            packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java\">Stack Overflow: how-do-i-document-packages-in-java</a>\n");
-            packageInfoBuilder.append(" */\n");
-            packageInfoBuilder.append("\n");
-            packageInfoBuilder.append("package edu.nps.moves.dis7.entities;\n");
+        if (language.toLowerCase().equals(JAVA))
+        {
+          packageInfoPath = outputDirectoryPath + "/" + "package-info.java";
+          packageInfoFile = new File(packageInfoPath);
+          
+          OutputStreamWriter packageInfoFileWriter;
+          FileOutputStream fso;
+          try {
+              packageInfoFile.createNewFile();
+              fso = new FileOutputStream(packageInfoFile);
+              packageInfoFileWriter = new OutputStreamWriter(fso, StandardCharsets.UTF_8);
+              packageInfoBuilder = new StringBuilder();
+              packageInfoBuilder.append("/**\n");
+              packageInfoBuilder.append(" * The <code>entities</code>  packages provide a large number of autogenerated utility classes for world entities of interest.");
+              packageInfoBuilder.append("\n");
+              packageInfoBuilder.append(" * <p> Online references: </p>\n");
+              packageInfoBuilder.append(" * <ul>\n");
+              packageInfoBuilder.append(" *      <li> GitHub <a href=\"https://github.com/open-dis/open-dis7-java\" target=\"_blank\">open-dis7-java library</a> </li> \n");
+              packageInfoBuilder.append(" *      <li> NPS <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/examples/src/OpenDis7Examples\" target=\"MV3500\">MV3500 Distributed Simulation Fundamentals course examples</a> </li> \n");
+              packageInfoBuilder.append(" *      <li> <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/specifications/README.md\" target=\"README.MV3500\">IEEE and SISO specification references</a> of interest</li> \n");
+              packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostds.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=46172\" target=\"SISO-REF-010\" >SISO-REF-010-2022 Reference for Enumerations for Simulation Interoperability</a> </li> \n");
+              packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostds.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=47284\" target=\"SISO-REF-10.1\">SISO-REF-10.1-2019 Reference for Enumerations for Simulation, Operations Manual</a></li>\n");
+              packageInfoBuilder.append(" *      <li> <a href=\"https://savage.nps.edu/open-dis7-java/javadoc\" target=\"_blank\">open-dis7 Javadoc</a>, <a href=\"https://savage.nps.edu/open-dis7-java/xml/DIS_7_2012.autogenerated.xsd\" target=\"_blank\">open-dis7 XML Schema</a>and <a href=\"https://savage.nps.edu/open-dis7-java/xml/SchemaDocumentation\" target=\"_blank\">open-dis7 XML Schema documentation</a></li> </ul>\n");
+              packageInfoBuilder.append("\n");
+              packageInfoBuilder.append(" * @see java.lang.Package\n");
+              packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/22095487/why-is-package-info-java-useful\">Stack Overflow: why-is-package-info-java-useful</a>\n");
+              packageInfoBuilder.append(" * @see <a href=\"https://stackoverflow.com/questions/624422/how-do-i-document-packages-in-java\">Stack Overflow: how-do-i-document-packages-in-java</a>\n");
+              packageInfoBuilder.append(" */\n");
+              packageInfoBuilder.append("\n");
+              packageInfoBuilder.append("package edu.nps.moves.dis7.entities;\n");
 
-            packageInfoFileWriter.write(packageInfoBuilder.toString());
-            packageInfoFileWriter.flush();
-            packageInfoFileWriter.close();
-            System.out.println("Created " + packageInfoPath);
-        }
-        catch (IOException ex) {
-            System.out.flush(); // avoid intermingled output
-            System.err.println (ex.getMessage()
-               + packageInfoFile.getAbsolutePath()
-            );
-            ex.printStackTrace(System.err);
+              packageInfoFileWriter.write(packageInfoBuilder.toString());
+              packageInfoFileWriter.flush();
+              packageInfoFileWriter.close();
+              System.out.println("Created " + packageInfoPath);
+          }
+          catch (IOException ex) {
+              System.out.flush(); // avoid intermingled output
+              System.err.println (ex.getMessage()
+                + packageInfoFile.getAbsolutePath()
+              );
+              ex.printStackTrace(System.err);
+          }
         }
   }
 
@@ -155,13 +256,88 @@ public class GenerateEntityTypes
   Method supplyDomainNameMethod;
   Method supplyDomainDescriptionMethod;
 
+  // private String DescriptionMethod(String enumName, int enumValue)
+  // {
+  //   enumMap.get(enumName).get(enumValue).description;
+  // }
+
+  // PlatformDomain getter methods
+    private static String PlatformDomainDescriptionMethod(int aValue)
+    {
+      return platformDomainEnums.get(aValue).description;
+    }
+    private static String PlatformDomainFromIntMethod(int aValue)
+    {
+      return "PlatformDomain." + platformDomainEnums.get(aValue).name;
+    }
+    private static String PlatformDomainNameMethod(int aValue)
+    {
+      return platformDomainEnums.get(aValue).name;
+    }
+
+  // Country getter methods
+    private static String CountryDescriptionMethod(int aValue)
+    {
+      return countryEnums.get(aValue).description;
+    }
+    private static String CountryFromIntMethod(int aValue)
+    {
+      return "Country." + countryEnums.get(aValue).name;
+    }
+    private static String CountryNameMethod(int aValue)
+    {
+      return countryEnums.get(aValue).name;
+    }
+
+  // Entity Kind getter methods
+    private static String KindDescriptionMethod(int aValue)
+    {
+      return entityKindEnums.get(aValue).description;
+    }
+    private static String KindFromIntMethod(int aValue)
+    {
+      return "EntityKind." + entityKindEnums.get(aValue).name;
+    }
+    private static String KindNameMethod(int aValue)
+    {
+      return entityKindEnums.get(aValue).name;
+    }
+
+  // Munition Domain getter methods
+    private static String MunitionDomainDescriptionMethod(int munitionValue)
+    {
+      return munitionDomainEnums.get(munitionValue).description;
+    }
+    private static String MunitionDomainFromIntMethod(int aValue)
+    {
+      return "MunitionDomain." + munitionDomainEnums.get(aValue).name;
+    }
+    private static String MunitionDomainNameMethod(int aValue)
+    {
+      return munitionDomainEnums.get(aValue).name;
+    }
+
+  // Supply Domain Getter Methods
+    private static String SupplyDomainDescriptionMethod(int supplyValue)
+    {
+      return supplyDomainEnums.get(supplyValue).description;
+    }
+    private static String SupplyFromIntMethod(int aValue)
+    {
+      return "SupplyDomain." + supplyDomainEnums.get(aValue).name;
+    }
+    private static String SupplyDomainNameMethod(int aValue)
+    {
+      return supplyDomainEnums.get(aValue).name;
+    }
+
   // Don't put imports in code for this, needs to have enumerations built first; do it this way
   // Update, this might now be unnecessary with the re-structuring of the projects
   private void buildKindDomainCountryInstances()
   {
     Method[] ma;
     try {
-      ma = getEnumMethods("edu.nps.moves.dis7.enumerations.PlatformDomain");
+      ma = getEnumMethods("edu.nps.moves.dis.enumerations.PlatformDomain");
       methodPlatformDomainFromIntMethod     = ma[FORVALUE];
       methodPlatformDomainNameMethod        = ma[NAME];
       methodPlatformDomainDescriptionMethod = ma[DESCRIPTION];
@@ -194,14 +370,144 @@ public class GenerateEntityTypes
   private static final int NAME = 1;
   private static final int DESCRIPTION = 2;
 
+  // Get the String enum rep for an enumerated value
+  private Method getEnumForValueMethod(String className)
+  {
+    Method enumValueMethod = null;
+
+    try
+    {
+      if (className.contains("PlatformDomain"))
+      {
+        enumValueMethod = this.getClass().getDeclaredMethod("PlatformDomainFromIntMethod", int.class);
+      }
+      else if (className.contains("Country"))
+      {
+        enumValueMethod = this.getClass().getDeclaredMethod("CountryFromIntMethod", int.class);
+      }
+
+      else if (className.contains("EntityKind"))
+      {
+        enumValueMethod = this.getClass().getDeclaredMethod("KindFromIntMethod", int.class);
+      }
+
+      else if (className.contains("MunitionDomain"))
+      {
+        enumValueMethod = this.getClass().getDeclaredMethod("MunitionDomainFromIntMethod", int.class);
+      }
+
+      else if (className.contains("SupplyDomain"))
+      {
+        enumValueMethod = this.getClass().getDeclaredMethod("SupplyFromIntMethod", int.class);
+      }
+    }
+    catch (Exception e)
+    {
+      System.err.println ("ERROR : " + this.getClass().getName() + ".getEnumValueMethod() exception:" + e);
+    }
+
+    return enumValueMethod;
+  }
+
+  private Method getNameMethod(String className)
+  {
+    Method nameMethod = null;
+
+      try
+      {
+        if (className.contains("PlatformDomain"))
+        {
+          nameMethod = this.getClass().getDeclaredMethod("PlatformDomainNameMethod", int.class);
+        }
+        else if (className.contains("Country"))
+        {
+          nameMethod = this.getClass().getDeclaredMethod("CountryNameMethod", int.class);
+        }
+
+        else if (className.contains("EntityKind"))
+        {
+          nameMethod = this.getClass().getDeclaredMethod("KindNameMethod", int.class);
+        }
+
+        else if (className.contains("MunitionDomain"))
+        {
+          nameMethod = this.getClass().getDeclaredMethod("MunitionDomainNameMethod", int.class);
+        }
+
+        else if (className.contains("SupplyDomain"))
+        {
+          nameMethod = this.getClass().getDeclaredMethod("SupplyDomainNameMethod", int.class);
+        }
+      }
+      catch (Exception e)
+      {
+        System.err.println ("ERROR : " + this.getClass().getName() + ".getDescription() exception:" + e);
+      }
+
+      return nameMethod;
+
+  }
+
+  private Method getDescriptionMethod(String className)
+  {
+      // Class[] cArgs = new Class[1];
+      // cArgs[0] = int.class;
+
+      Method descriptionMethod = null;
+
+      try
+      {
+        if (className.contains("PlatformDomain"))
+        {
+          // Class cls = this.getClass();
+          descriptionMethod = this.getClass().getDeclaredMethod("PlatformDomainDescriptionMethod", int.class);
+        }
+
+        else if (className.contains("Country"))
+        {
+          descriptionMethod = this.getClass().getDeclaredMethod("CountryDescriptionMethod", int.class);
+        }
+
+        else if (className.contains("EntityKind"))
+        {
+          descriptionMethod = this.getClass().getDeclaredMethod("KindDescriptionMethod", int.class);
+        }
+
+        else if (className.contains("MunitionDomain"))
+        {
+          descriptionMethod = this.getClass().getDeclaredMethod("MunitionDomainDescriptionMethod", int.class);
+        }
+
+        else if (className.contains("SupplyDomain"))
+        {
+          descriptionMethod = this.getClass().getDeclaredMethod("SupplyDomainDescriptionMethod", int.class);
+        }
+      }
+      catch (Exception e)
+      {
+        System.err.println ("ERROR : " + this.getClass().getName() + ".getDescription() exception:" + e);
+      }
+
+      return descriptionMethod;
+  }
+
   private Method[] getEnumMethods(String className) throws Exception
   {
     Method[] ma = new Method[3];
 
-    Class<?> cls = Class.forName(className);
-    ma[FORVALUE] = cls.getDeclaredMethod("getEnumForValue", int.class);
-    ma[NAME] = cls.getMethod("name", (Class[]) null);
-    ma[DESCRIPTION] = cls.getDeclaredMethod("getDescription", (Class[]) null);
+    if (language.toLowerCase().equals(JAVA))
+    {
+      Class<?> cls = Class.forName(className);
+      ma[FORVALUE] = cls.getDeclaredMethod("getEnumForValue", int.class);
+      ma[NAME] = cls.getMethod("name", (Class[]) null);
+      ma[DESCRIPTION] = cls.getDeclaredMethod("getDescription", (Class[]) null);
+    }
+    else
+    {
+      ma[FORVALUE]    = getEnumForValueMethod(className);
+      ma[NAME]        = getNameMethod(className);
+      ma[DESCRIPTION] = getDescriptionMethod(className);
+    }
 
     return ma;
   }
@@ -209,17 +515,32 @@ public class GenerateEntityTypes
   String getDescription(Method enumGetter, Method descriptionGetter, int i) throws Exception
   {
       String result = "";
+      
+      if (enumGetter == null) System.out.println(GenerateEntityTypes.class.getName() + ".getDescription : enumGetter is null");
+      if (descriptionGetter == null) System.out.println(GenerateEntityTypes.class.getName() + ".getDescription : descriptionGetter is null");
+
       if ((enumGetter == null) || (descriptionGetter == null))
           return result;
       try 
       {
-        Object enumObj = getEnum(enumGetter, i);
-        result = (String) descriptionGetter.invoke(enumObj, (Object[]) null);
+        Object enumObj = null;
+        
+        if (language.toLowerCase().equals(JAVA))
+        {
+          enumObj = getEnum(enumGetter, i);
+          result = (String) descriptionGetter.invoke(enumObj, (Object[]) null);
+        }
+        else
+        {
+          result = (String) descriptionGetter.invoke(enumObj, i);
+        }
+        
       }
       catch (Exception e)
       {
           System.err.println (this.getClass().getName() + ".getDescription() exception:" + e);
       }
+
       return result;
   }
 
@@ -227,8 +548,28 @@ public class GenerateEntityTypes
   {
       if (enumGetter == null)
           return ""; // TODO fix
-    Object enumObj = getEnum(enumGetter, i);
-    return (String) nameGetter.invoke(enumObj, (Object[]) null);
+
+    String result = "";
+    Object enumObj = null;
+
+    if (language.toLowerCase().equals(JAVA))
+    {
+      enumObj = getEnum(enumGetter, i);
+      result = (String) nameGetter.invoke(enumObj, (Object[]) null);
+    }
+    else
+    {
+      // System.out.println("Name getter method : " + nameGetter.toString());
+      if (nameGetter == null)
+      {
+        System.out.println("NameGetter is null");
+        System.out.print(Thread.currentThread().getStackTrace());
+      }
+      result = (String) nameGetter.invoke(enumObj, i);
+    }
+
+    return result;
+    
   }
 
   Object getEnum(Method enumGetter, int i) throws Exception
@@ -251,6 +592,32 @@ public class GenerateEntityTypes
     loadTemplates();
     buildKindDomainCountryInstances(); // TODO questionable invocation, now working...
     
+    if (!language.toLowerCase().equals(JAVA))
+    {
+      // Parse the XML file to load the enumeration data
+      System.out.println("Begin processsing required enumertion values");
+      EnumCollector enumCollector = new EnumCollector();
+      factory.newSAXParser().parse(new File(sisoXmlFile), enumCollector);
+
+      System.out.println("Completed parsing enumerations");
+
+      System.out.println("  countryEnums        : " + countryEnums.size());
+      System.out.println("  entityKindEnums     : " + entityKindEnums.size());
+      System.out.println("  platformDomainEnums : " + platformDomainEnums.size());
+      System.out.println("  munitionDomainEnums : " + munitionDomainEnums.size());
+      System.out.println("  supplyDomainEnums   : " + supplyDomainEnums.size());
+      // for (int index = 0; index < 2; index++) 
+      //   System.out.println(countryEnums.get(index).toString());
+
+      // for (int index = 0; index < platformDomainEnums.size(); index++) 
+      //   System.out.println(platformDomainEnums.get(index).toString());
+
+      // for (int index = 0; index < supplyDomainEnums.size(); index++) 
+      //   System.out.println(supplyDomainEnums.get(index).toString());
+
+
+    }
+
     System.out.println("Generating entities:");
     MyHandler handler = new MyHandler();
     factory.newSAXParser().parse(new File(sisoXmlFile), handler);
@@ -266,10 +633,15 @@ public class GenerateEntityTypes
 
   private void loadTemplates()
   {
+
+    String languageFolder = this.language;
+    if (language.equals(JAVA))
+      languageFolder = "";
+
     try {
       licenseTemplate          = loadOneTemplate("../pdus/dis7javalicense.txt");
-      entitytypecommonTemplate = loadOneTemplate("entitytypecommon.txt");
-      uidfactoryTemplate       = loadOneTemplate("uidfactory.txt");
+      entitytypecommonTemplate = loadOneTemplate("../entitytypes/" + languageFolder + "/entitytypecommon.txt");
+      uidfactoryTemplate       = loadOneTemplate("../entitytypes/" + languageFolder + "/uidfactory.txt");
     }
     catch (Exception ex) {
       throw new RuntimeException(ex);
@@ -278,6 +650,14 @@ public class GenerateEntityTypes
 
   private String loadOneTemplate(String s) throws Exception
   {
+
+    // String templateContents = new String(Files.readAllBytes(Paths.get(getClass().getResource(s).toURI())));
+    System.out.println("Loading template : " + s);
+    // System.out.println("     path : " + Paths.get(getClass()).normalize().toString());
+    System.out.println("    class : " + getClass());
+    System.out.println(" resource : " + getClass().getResource(s));
+    System.out.println("      uri : " + getClass().getResource(s).toURI());
+
     return new String(Files.readAllBytes(Paths.get(getClass().getResource(s).toURI())), StandardCharsets.UTF_8.name());
   }
   
@@ -291,9 +671,21 @@ public class GenerateEntityTypes
     String description            = new String();
     String packageFromDescription = new String();
     String enumFromDescription    = new String();
-    List<DescriptionElem> children = new ArrayList<>();
+    ArrayList<DescriptionElem> children = new ArrayList<>();
     String value                  = new String();
     String uid                    = new String();
+
+    public String toString()
+    {
+      String retVal = "";
+      retVal += "  Kind : " + description + "\n";
+      retVal += "   pkg : " + packageFromDescription + "\n";
+      retVal += "  enum : " + enumFromDescription + "\n";
+      retVal += " Value : " + value + "\n";
+      retVal += "   UID : " + uid + "\n";
+
+      return retVal;
+    }
   }
 
   class EntityElem
@@ -303,6 +695,17 @@ public class GenerateEntityTypes
     String country = new String();
     String uid     = new String();
     List<DescriptionElem> categories = new ArrayList<>();
+
+    public String toString()
+    {
+      String retVal = "   Kind : " + kind + "\n";
+      retVal += " Domain : " + domain + "\n";
+      retVal += "Country : " + country + "\n";
+      retVal += "    UID : " + uid + "\n";
+
+      return retVal;
+    }
+
   }
 
   class CategoryElem extends DescriptionElem
@@ -325,6 +728,113 @@ public class GenerateEntityTypes
     SpecificElem parent;
   }
 
+
+  public class EnumCollector extends DefaultHandler
+  {
+    EnumElem currentEnum;
+    EnumRowElem currentEnumRow;
+
+    public EnumCollector()
+    {
+      super();
+    }
+
+    public boolean IsEnumOfInterest(String enumString)
+    {
+      boolean isInteresting = false;
+
+      int enumValue = Integer.parseInt(enumString);
+
+      switch (enumValue)
+      {
+        case 7:     // EntityKind
+        case 8:     // PlatformDomain
+        case 14:    // MunitionDomain
+        case 29:    // Country
+        case 600:   // SupplyDomain
+          isInteresting = true;
+          break;
+      }
+      
+      return isInteresting;
+    }
+
+    void HandleEnumValue()
+    {
+      if (currentEnumRow == null) return;
+
+      switch (currentEnum.name)
+      {
+        case "Country":
+          countryEnums.add(currentEnumRow);
+          break;
+        case "SupplyDomain":
+          supplyDomainEnums.add(currentEnumRow);
+          break;
+        case "MunitionDomain":
+          munitionDomainEnums.add(currentEnumRow);
+          break;
+        case "PlatformDomain":
+          platformDomainEnums.add(currentEnumRow);
+          break;
+        case "EntityKind":
+          entityKindEnums.add(currentEnumRow);
+          break;
+        default:
+          System.out.println("Enum name : " + currentEnum.name);
+          break;
+      }
+
+    }
+
+
+    @Override
+    public void startElement(String uri, String localName, String qName, Attributes attributes)
+    {
+      switch (qName)
+      {
+        case "enum":
+          // See if we can process an enum
+          String uidString = attributes.getValue("uid");
+          if (!IsEnumOfInterest(uidString)) break;
+
+          currentEnum = new EnumElem();
+          currentEnum.name = StringUtils.fixName(attributes.getValue("name")); // name canonicalization C14N
+          currentEnum.uid  = attributes.getValue("uid");
+          if (currentEnum.footnote != null)
+              currentEnum.footnote = normalizeDescription(currentEnum.footnote);
+          break;
+
+          case "enumrow":
+            if (currentEnum == null) break;
+
+            currentEnumRow = new EnumRowElem();
+            currentEnumRow.description = attributes.getValue("description");
+            if (currentEnumRow.description != null)
+              currentEnumRow.description = normalizeDescription(currentEnumRow.description);
+            currentEnumRow.value = attributes.getValue("value");
+            currentEnumRow.name = StringUtils.createEnumName(StringUtils.normalizeDescription(currentEnumRow.description), false);
+            HandleEnumValue();
+            break;
+      }
+    }
+
+    @Override
+    public void endElement(String uri, String localName, String qName)
+    {
+      switch (qName)
+      {
+          case "enum":
+              currentEnum = null;
+              break;
+
+          // case "enumrow":
+          //     currentEnumRow = null;
+          //     break;
+      }
+    }
+  }
+
   /** XML handler for recursively reading information and autogenerating code, namely an
      * inner class that handles the SAX parsing of the XML file. This is relatively simple, if
      * a little verbose. Basically we just create the appropriate objects as we come across the
@@ -337,7 +847,7 @@ public class GenerateEntityTypes
         {
             super();
         }
-    List<EntityElem> entities = new ArrayList<>();
+    ArrayList<EntityElem> entities = new ArrayList<>();
     EntityElem            currentEntity;
     CategoryElem          currentCategory;
     SubCategoryElem       currentSubCategory;
@@ -350,6 +860,7 @@ public class GenerateEntityTypes
     @Override
     public void startElement(String uri, String localName, String qName, Attributes attributes)
     {
+
       if (inCot)   // don't want anything in this group
         return;
 
@@ -370,6 +881,7 @@ public class GenerateEntityTypes
       if (!inCetUid30) // only want entities in this group, uid 30
         return;
       
+
       switch (qName) 
       {
         case "cot":
@@ -399,7 +911,7 @@ public class GenerateEntityTypes
           if (currentCategory.description != null)
               currentCategory.description  = normalizeDescription(currentCategory.description);
           currentCategory.uid              = attributes.getValue("uid");
-          
+
           if (currentSubCategory != null) // attribute order independent
           {
                 currentSubCategory.parent  = currentCategory;
@@ -481,14 +993,17 @@ public class GenerateEntityTypes
           break;
 
         default:
+
       }
     }
 
     @Override
     public void endElement(String uri, String localName, String qName)
     {
+      
       if (qName == null)
         return;
+
       if (!qName.equals("cot") && inCot)
         return;
 
@@ -511,6 +1026,7 @@ public class GenerateEntityTypes
             if (currentCategory != null) //might have been deprecated
                 writeCategoryFile(null);
             currentCategory = null; // reset for next time
+            // System.exit(0);
             break;
 
           case "subcategory":
@@ -545,6 +1061,7 @@ public class GenerateEntityTypes
         System.err.println("endElement qName=" + qName + ", " + ex.getMessage());
         throw new RuntimeException(ex);
       }
+
     }
 
     @Override
@@ -572,17 +1089,36 @@ public class GenerateEntityTypes
       uid2ClassWriter = new BufferedWriter(new FileWriter(f));
     }
     
+  
     private void saveEntityFile(TypeClassData data, String uid)
     {
+        String fileExtension = StringUtils.getSourceFileExtension(language);
+
+        // end the ctor statement
         data.sb.append("    }\n");
+
+        if (!language.toLowerCase().equals(JAVA))
+        {
+          if (language.toLowerCase().equals(CPP))
+            data.sb.append("};\n");
+          else
+            data.sb.append("}\n");
+          data.sb.append("\n");
+          data.sb.append(StringUtils.formatNamespaceEndStatement(currentNamespace, language));
+          saveFile(data.directory, data.className + fileExtension, data.sb.toString());
+          return;
+        }
+
         data.sb.append("    /** Create a new instance of this final (unmodifiable) class\n");
         data.sb.append("      * @return copy of class for use as data */\n");
-        data.sb.append("    public static ").append(data.className).append(" createInstance()\n");
+        data.sb.append("    public static " + data.className + " createInstance()\n");
         data.sb.append("    {\n");
-        data.sb.append("            return new ").append(data.className).append("();\n");
+        data.sb.append("            return new " + data.className + "();\n");
         data.sb.append("    }\n");
         data.sb.append("}\n");
-        saveFile(data.directory, data.className + ".java", data.sb.toString());
+
+        saveFile(data.directory, data.className + fileExtension, data.sb.toString());
+        
         addToPropertiesFile(data.pkg, data.className, uid);
         
         packageInfoPath = data.directory + "/" + "package-info.java";
@@ -590,10 +1126,12 @@ public class GenerateEntityTypes
       
         if (!packageInfoFile.exists()) // write package-info.java during first time through
         {
-            FileWriter packageInfoFileWriter;
+          OutputStreamWriter packageInfoFileWriter;
+            FileOutputStream fso;
             try {
                 packageInfoFile.createNewFile();
-                packageInfoFileWriter = new FileWriter(packageInfoFile, StandardCharsets.UTF_8);
+                fso = new FileOutputStream(packageInfoFile);
+                packageInfoFileWriter = new OutputStreamWriter(fso, StandardCharsets.UTF_8);
                 packageInfoBuilder = new StringBuilder();
                 packageInfoBuilder.append("/**\n");
                 if (!data.countryValue.isEmpty())
@@ -613,8 +1151,8 @@ public class GenerateEntityTypes
                 packageInfoBuilder.append(" *      <li> GitHub <a href=\"https://github.com/open-dis/open-dis7-java\" target=\"_blank\">open-dis7-java library</a> </li> \n");
                 packageInfoBuilder.append(" *      <li> NPS <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/examples/src/OpenDis7Examples\" target=\"MV3500\">MV3500 Distributed Simulation Fundamentals course examples</a> </li> \n");
                 packageInfoBuilder.append(" *      <li> <a href=\"https://gitlab.nps.edu/Savage/NetworkedGraphicsMV3500/-/tree/master/specifications/README.md\" target=\"README.MV3500\">IEEE and SISO specification references</a> of interest</li> \n");
-                packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostandards.org/page/ReferenceDocuments\" target=\"SISO-REF-010\" >SISO-REF-010-2024 (v34) Reference for Enumerations for Simulation Interoperability</a> </li> \n");
-                packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostandards.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=47284\" target=\"SISO-REF-10.1\">SISO-REF-10.1-2019 Reference for Enumerations for Simulation, Operations Manual</a></li>\n");
+                packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostds.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=46172\" target=\"SISO-REF-010\" >SISO-REF-010-2022 Reference for Enumerations for Simulation Interoperability</a> </li> \n");
+                packageInfoBuilder.append(" *      <li> <a href=\"https://www.sisostds.org/DigitalLibrary.aspx?Command=Core_Download&amp;EntryId=47284\" target=\"SISO-REF-10.1\">SISO-REF-10.1-2019 Reference for Enumerations for Simulation, Operations Manual</a></li>\n");
                 packageInfoBuilder.append(" *      <li> <a href=\"https://savage.nps.edu/open-dis7-java/javadoc\" target=\"_blank\">open-dis7 Javadoc</a>, <a href=\"https://savage.nps.edu/open-dis7-java/xml/DIS_7_2012.autogenerated.xsd\" target=\"_blank\">open-dis7 XML Schema</a>and <a href=\"https://savage.nps.edu/open-dis7-java/xml/SchemaDocumentation\" target=\"_blank\">open-dis7 XML Schema documentation</a></li> </ul>\n");
                 packageInfoBuilder.append("\n");
                 packageInfoBuilder.append(" * @see java.lang.Package\n");
@@ -628,7 +1166,7 @@ public class GenerateEntityTypes
                 packageInfoFileWriter.write(packageInfoBuilder.toString());
                 packageInfoFileWriter.flush();
                 packageInfoFileWriter.close();
-                System.out.println("Created " + packageInfoPath);
+                // System.out.println("Created " + packageInfoPath);
             }
             catch (IOException ex) {
                 System.out.flush(); // avoid intermingled output
@@ -642,8 +1180,8 @@ public class GenerateEntityTypes
   
     private void appendCommonStatements(TypeClassData data)
     {
-      String currentSpecificName = null  /*= new String()*/; // handle potential nulls
-      String currentSpecificValue /*= new String()*/;
+      String currentSpecificName  = new String(); // handle potential nulls
+      String currentSpecificValue = new String();
       if (currentSpecific != null)
       {
           currentSpecificName  = fixName(currentSpecific.description);
@@ -653,8 +1191,8 @@ public class GenerateEntityTypes
       {
           currentSpecificValue  = "<code>(none)</code>"; // second of two entries to avoid whitespace
       }
-      String currentSubCategoryName = null  /*= new String()*/; // handle potential nulls
-      String currentSubCategoryValue /*= new String()*/;
+      String currentSubCategoryName  = new String(); // handle potential nulls
+      String currentSubCategoryValue = new String();
       if (currentSubCategory != null)
       {
           currentSubCategoryName  = fixName(currentSubCategory.description);
@@ -667,15 +1205,37 @@ public class GenerateEntityTypes
       {
           currentSubCategoryValue  = "<code>(none)</code>"; // second of two entries to avoid whitespace
       }
-      String seeCurrentCategory = null /*= new String()*/;
+      String seeCurrentCategory = new String();
       if (!currentCategory.packageFromDescription.isEmpty())
           seeCurrentCategory = " * @see Category\n" + " * @see " + currentCategory.packageFromDescription;
-      String seeCurrentSubcategory = null /*= new String()*/;
-      if (currentSubCategoryName != null && !currentSubCategoryName.isEmpty())
+      String seeCurrentSubcategory = new String();
+      if (!currentSubCategoryName.isEmpty())
           seeCurrentSubcategory = " * @see SubCategory\n";
           // TODO often package-specific since repeated, sometimes numeric:  + " * @see " + currentSubCategoryName;
-      
+
+      String usingNamespaceStatement = "";
+      if (language.toLowerCase().equals(JAVA))
+      {
+        currentNamespace = "";
+      }
+      else if (language.toLowerCase().equals(CPP))
+      {
+        usingNamespaceStatement += "#include <" + globalNamespace + "/EntityType.h>\n";
+        usingNamespaceStatement += "#include <" + globalNamespace + "/enumerations/Country.h>\n";
+        usingNamespaceStatement += "#include <" + globalNamespace + "/enumerations/EntityKind.h>\n";
+        usingNamespaceStatement += "#include <" + globalNamespace + "/enumerations/PlatformDomain.h>\n";
+        usingNamespaceStatement += "#include <" + globalNamespace + "/enumerations/MunitionDomain.h>\n";
+        usingNamespaceStatement += "#include <" + globalNamespace + "/enumerations/SupplyDomain.h>\n";
+        usingNamespaceStatement += "\n";
+        usingNamespaceStatement += "using namespace " + enumNamespace  + ";";
+      }
+      else
+      {
+        usingNamespaceStatement  = "using " + enumNamespace + ";";
+      }
+
       String contents = String.format(entitytypecommonTemplate,       data.pkg,     // Class definition 
+                                      usingNamespaceStatement,
                                       data.className,                                     // Opening sentence
                                       data.className,                 data.className, // Usage 
                                       data.countryNamePretty,         data.countryValue,
@@ -692,18 +1252,35 @@ public class GenerateEntityTypes
                                       data.entityDomainName,                              // @see %s (interface Domain)
                                       seeCurrentCategory,                                 // @see Category (if present)
                                       seeCurrentSubcategory,                              // @see SubCategory (if present)
-                                      data.className, data.className,                 // class definition
+                                      StringUtils.formatNamespaceStatement(currentNamespace, language),                // global namespace build for type seperation
+                                      data.className, globalNamespace, data.className,                 // class definition
                                       data.countryName, 
                                       data.entityKindName, 
                                       data.entityDomainName, 
                                       data.entityDomainValue);
+      
       data.sb.append(licenseTemplate);
       data.sb.append(contents);
+
+      if (data.entityDomainValue.isEmpty())
+      {
+        data.sb.append("// Domain value is empty\n");
+        data.sb.append(data.toString());
+        data.sb.append(currentEntity.toString());
+      }
     }
 
     private void appendStatement(DescriptionElem elem, String typ, StringBuilder sb)
     {
-      String template = "        set"+typ+"((byte)%s); // uid %s, %s\n";
+      String template = "";
+
+      if (language.toLowerCase().equals(CSHARP))
+        template = "        "+typ+" = (byte)%s; // uid %s, %s\n";
+      else if (language.toLowerCase().equals(CPP))
+        template = "        set"+typ+"((std::uint8_t)%s); // uid %s, %s\n";
+      else if (language.toLowerCase().equals(JAVA))
+        template = "        set"+typ+"((byte)%s); // uid %s, %s\n";
+
       if (elem             == null)
           return;
       if (elem.value       == null)
@@ -715,12 +1292,53 @@ public class GenerateEntityTypes
       sb.append(String.format(template, elem.value, elem.uid, elem.description));
     }
     
+    private void setNamespace()
+    {
+      if (currentEntity != null)
+      {
+        int countryInteger  = Integer.parseInt(currentEntity.country);
+        int entityKindInteger   = Integer.parseInt(currentEntity.kind);
+        int entityDomainInteger = Integer.parseInt(currentEntity.domain);
+
+        String countryDescription = CountryDescriptionMethod(countryInteger);
+        String countryCode = buildCountryPackagePart(countryDescription);
+        String kindName    = KindNameMethod(entityKindInteger);
+
+        currentNamespace = globalNamespace + "::entities" + "::" + countryCode + "::" + kindName;
+
+        String domainName = "";
+        switch (kindName.toLowerCase())
+        {
+          case "munition":
+            // domainName = getName(munitionDomainFromIntMethod, munitionDomainNameMethod, entityDomainInteger);
+            domainName = MunitionDomainNameMethod(entityDomainInteger);
+            break;
+          case "supply":
+            // domainName = getName(supplyDomainFromIntMethod, supplyDomainNameMethod, entityDomainInteger);
+            domainName = SupplyDomainNameMethod(entityDomainInteger);
+            break;
+          default:
+            // domainName = getName(methodPlatformDomainFromIntMethod, methodPlatformDomainNameMethod, entityDomainInteger);
+            domainName = PlatformDomainNameMethod(entityDomainInteger);
+            break;
+        }
+
+        currentNamespace += "::" + domainName;
+
+
+      }
+    }
     private void writeCategoryFile(TypeClassData d)
     {
       TypeClassData data = d;
+
+      setNamespace();
+
       if (data == null) {
         data = buildEntityCommon(currentCategory.toString(), fixName(currentCategory),currentCategory.uid);
       }
+// data.sb.append("// This is a Category file\n");
+      data.sb.append("\n");
       appendStatement(currentCategory, "Category", data.sb);
 
       if (d == null) {
@@ -730,17 +1348,22 @@ public class GenerateEntityTypes
 
     private void writeSubCategoryFile(TypeClassData d)
     {
+
+      setNamespace();
+
       if ((currentCategory == null) || (currentSubCategory == null))
       {
           System.err.println (this.getClass().getName() + " writeSubCategoryFile has problem with currentCategory or currentSubCategory null, no file written");
           if (d != null)
               System.err.println ("DataPacket d=" + d.sb.toString());
       }
-          
+
       TypeClassData data = d;
       if (data == null) {
         data = buildEntityCommon(currentSubCategory.toString(), fixName(currentSubCategory), currentSubCategory.uid);
       }
+// data.sb.append("// This is a SubCategory file\n");
+      data.sb.append("\n");
       appendStatement(currentCategory,    "Category",    data.sb);
       appendStatement(currentSubCategory, "SubCategory", data.sb);
 
@@ -750,10 +1373,14 @@ public class GenerateEntityTypes
 
     private void writeSpecificFile(TypeClassData d)
     {
+      setNamespace();
+
       TypeClassData data = d;
       if (data == null) {
         data = buildEntityCommon(currentSpecific.toString(), fixName(currentSpecific),currentSpecific.uid);
       }
+// data.sb.append("// This is a specific file\n");
+      data.sb.append("\n");
       appendStatement(currentCategory,    "Category",    data.sb);
       appendStatement(currentSubCategory, "SubCategory", data.sb);
       appendStatement(currentSpecific,    "Specific",    data.sb);
@@ -764,10 +1391,14 @@ public class GenerateEntityTypes
 
     private void writeExtraFile(TypeClassData d)
     {
+      setNamespace();
+      
       TypeClassData data = d;
       if (data == null) {
         data = buildEntityCommon(currentExtra.toString(), fixName(currentExtra),currentExtra.uid);
       }
+// data.sb.append("// This is a Extra file\n");
+      data.sb.append("\n");
       appendStatement(currentCategory,    "Category",    data.sb);
       appendStatement(currentSubCategory, "SubCategory", data.sb);
       appendStatement(currentSpecific,    "Specific",    data.sb);
@@ -789,6 +1420,7 @@ public class GenerateEntityTypes
 //        System.err.println("buildEntityCommon fixedName=" + fixedName + ", uid=" + uid + ", outputDirectory=" + outputDirectory); // debug trace
         
         buildPackagePath(currentEntity, dataPacket);
+
         dataPacket.directory = new File(outputDirectory, dataPacket.sb.toString());
         dataPacket.directory.mkdirs(); // ensure that directory exists
 
@@ -812,16 +1444,24 @@ public class GenerateEntityTypes
         String entityDomainName;
         String entityDomainDescription;
         String entityDomainValue;
-        switch (entityKindName) {
+        switch (entityKindName.toUpperCase()) {
           case "MUNITION":
             entityDomainName = "MunitionDomain";
+            // System.out.println("Finding munition domain name from  " + entityDomainInteger);
             entityDomainDescription = "Munition Domain";
             entityDomainValue = getName(munitionDomainFromIntMethod, munitionDomainNameMethod, entityDomainInteger);
             break;
           case "SUPPLY":
             entityDomainName = "SupplyDomain";
             entityDomainDescription = "Supply Domain";
+            // System.out.println("Finding supply domain name from " + entityDomainInteger);
             entityDomainValue = getName(supplyDomainFromIntMethod, supplyDomainNameMethod, entityDomainInteger);
+
+            if (entityDomainValue.isEmpty())
+            {
+              System.out.println("Failed to find suuply domain value from integer : " + entityDomainInteger);
+              System.out.println(currentEntity.toString());
+            }
             break;
           case "OTHER":
           case "PLATFORM":
@@ -834,7 +1474,9 @@ public class GenerateEntityTypes
           default:
             entityDomainName = "PlatformDomain";
             entityDomainDescription = "Platform Domain";
+            // System.out.println("Finding platform domain name from  " + entityDomainInteger);
             entityDomainValue = getName(methodPlatformDomainFromIntMethod, methodPlatformDomainNameMethod, entityDomainInteger);
+            // System.out.println("Found domain name : " + entityDomainValue);
             break;
         }
 
@@ -869,7 +1511,8 @@ public class GenerateEntityTypes
     File target = new File(parentDir, name);
     try {
       target.createNewFile();
-      try (FileWriter fw = new FileWriter(target, StandardCharsets.UTF_8)) {
+      try (FileOutputStream fso = new FileOutputStream(target)) {
+        OutputStreamWriter fw = new OutputStreamWriter(fso,StandardCharsets.UTF_8);
         fw.write(contents);
         fw.flush();
       }
@@ -953,6 +1596,8 @@ public class GenerateEntityTypes
   //Country, kind, domain 
   private void buildPackagePath(EntityElem ent, TypeClassData data) throws Exception
   {
+    // System.out.println(ent.toString());
+    // System.out.println(data.toString());
     if (data == null)
         System.err.println("buildPackagePath data.sb 0: data = null");
     if (data.sb == null)
@@ -962,8 +1607,10 @@ public class GenerateEntityTypes
 //    else System.err.println("buildPackagePath data.sb 1: " + data.sb.toString());
     
     String countryDescription = GenerateEntityTypes.this.getDescription(countryFromIntMethod, countryDescriptionMethod, Integer.parseInt(ent.country));
+    
     if (countryDescription.isEmpty())
     {
+      System.exit(0);
         System.err.println(this.getClass().getName() + ".buildPackagePath() failure, no country description");
         return;
     }
@@ -1223,15 +1870,22 @@ public class GenerateEntityTypes
      */
   public static void main(String[] args)
   {
+
+    sisoXmlFile         = args[0];
+    outputDirectoryPath = args[1];
+    packageName         = args[2];
+    language            = args[3];
+
+    System.out.println("GenerateJammers");
+    System.out.println("   sisoXmlFile : "         + sisoXmlFile);
+    System.out.println("   outputDirectoryPath : " + outputDirectoryPath);
+    System.out.println("   packageName : "         + packageName);
+    System.out.println("   language : "            + language);
+
     try 
     {
-        if  (args.length == 0)
-             new GenerateEntityTypes("",      "",      ""     ).run(); // use defaults
-        else 
-        {
-            System.out.println ("GenerateEntityTypes(" + args[0] + ", " + args[1] + ", " + args[2] + ").run()");
-            new GenerateEntityTypes(args[0], args[1], args[2]).run();
-        }
+        System.out.println ("GenerateEntityTypes(" + sisoXmlFile + outputDirectoryPath + packageName + language  +").run()");
+        new GenerateEntityTypes(sisoXmlFile, outputDirectoryPath, packageName, language).run();
     }
     catch (SAXException | IOException | ParserConfigurationException ex)
     {

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2008-2023, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
+ * Copyright (c) 2008-2025, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
  * This work is provided under a BSD open-source license, see project license.html and license.txt
  */
 package edu.nps.moves.dis7.source.generator.pdus;
@@ -17,7 +17,7 @@ import java.util.*;
  * @author DMcG
  */
 
-public class GeneratedClass 
+public class GeneratedClass implements Comparable<GeneratedClass>
 {
     /** A list of all the attributes (ivars) of one class */
     protected List<GeneratedClassAttribute> classAttributes = new ArrayList<>();
@@ -242,5 +242,15 @@ public class GeneratedClass
     public String getAliasFor()
     {
       return aliasFor;
+    }
+
+    /** 
+     * Comparison function used to sort a list of GeneratedClasses by name
+     * @return int
+     */
+    @Override
+    public int compareTo(GeneratedClass otherClass)
+    {
+        return this.getName().compareTo(otherClass.getName());
     }
 }

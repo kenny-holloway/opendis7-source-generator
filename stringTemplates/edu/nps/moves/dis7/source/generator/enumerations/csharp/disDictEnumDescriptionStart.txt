@@ -1,0 +1,4 @@
+std::string EnumDescription(%s a)
+{
+    static constexpr auto max = static_cast<size_t>(%s::INVALID) + 1;
+    static constexpr std::array<const char*, max> cstr = {

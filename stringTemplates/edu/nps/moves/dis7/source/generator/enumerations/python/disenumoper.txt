@@ -1,0 +1,11 @@
+   bool operator==(%s a) const { return %s == a.%s; }
+   bool operator!=(%s a) const { return %s != a.%s; }
+   void operator = (const %sEnum anEnum) {%s = anEnum;}
+
+   virtual void marshal(dis::DataStream& dataStream) const;
+   virtual void unmarshal(dis::DataStream& dataStream);
+
+   // TODO : friends are frowned upon
+   friend ostream& operator<<(ostream& os, const %s& id);
+   // friend istream& operator>>(istream& is, %s& id);
+

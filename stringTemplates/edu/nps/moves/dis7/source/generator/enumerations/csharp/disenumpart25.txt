@@ -1,0 +1,11 @@
+#if 0
+static %s %s_GetEnumByIndex(int value)
+{
+  return static_cast<%s>(value);
+}
+
+static std::string %s_EnumAsString(%s value)
+{
+  return %s_convertEnum[static_cast<int>(value)];
+}
+#endif

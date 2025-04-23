@@ -1,0 +1,4 @@
+bool is_valid(%s %s)
+{
+   static constexpr std::array<%s, %s> enumValues = 
+   {{

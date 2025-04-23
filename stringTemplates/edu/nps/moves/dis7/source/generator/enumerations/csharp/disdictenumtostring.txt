@@ -1,0 +1,9 @@
+        public static string GetDescription(string tag)
+        {
+            return %s.TryGetValue(tag, out var value) ? value : "Not Found";
+        }
+
+        public new static string ToString()
+        {
+            return string.Join(System.Environment.NewLine, %s);
+        }

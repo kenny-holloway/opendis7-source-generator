@@ -1,0 +1,83 @@
+
+void add_custom_value(%s enumValue, const std::string& name)
+{
+    // TODO should clean any odd entries from the name
+    %s.emplace(enumValue, name);
+}
+
+bool is_valid(%s enumValue)
+{
+    // returns true if any matches found
+    return (!!%s.count(enumValue));
+}
+
+const std::string& get_description(%s enumValue)
+{
+    static const std::string invalid = "Invalid Enumeration";
+    const auto itr = %s.find(enumValue);
+    return (itr == %s.end()) ? invalid : itr->second;
+}
+
+std::string to_string(%s enumValue)
+{
+    return std::to_string(static_cast<size_t>(enumValue)) + " [" + get_description(enumValue) + "]";
+}
+
+void concurrent_add_custom_value(%s enumValue, const std::string& name)
+{
+    std::lock_guard<::mutex> threadLocker(%s_mutex);
+    add_custom_value(enumValue, name);
+}
+
+bool concurrent_is_valid(%s enumValue)
+{
+    std::lock_guard<::mutex> threadLocker(%s_mutex);
+    return is_valid(enumValue);
+}
+
+const std::string& concurrent_get_description(%s enumValue)
+{
+   std::lock_guard<::mutex> threadLocker(%s_mutex);
+   return get_description(enumValue);
+}
+
+std::string concurrent_to_string(%s enumValue)
+{
+   std::lock_guard<::mutex> threadLocker(%s_mutex);
+   return to_string(enumValue);
+}
+
+std::ostream& operator<<(std::ostream& os, %s enumValue)
+{
+    return os << std::to_string(static_cast<size_t>(enumValue)) + " [" + get_description(enumValue) + "]";
+}
+
+dis::DataStream& operator <<(dis::DataStream &ds, %s enumValue)
+{
+    return ds << static_cast<uint%s_t>(enumValue);
+}
+
+%s& operator>>(dis::DataStream& ds, %s& a)
+{
+    uint%s_t asInt;
+    ds >> asInt;
+    a = static_cast<%s>(asInt);
+    return a;
+}
+
+int get_marshaled_size(%s a)
+{
+   return %s; // %s bits
+}
+
+void marshal(dis::DataStream& ds, %s a)
+{
+    ds << static_cast<uint%s_t>(a);
+}
+
+void unmarshal(dis::DataStream& ds, %s& a)
+{
+    uint%s_t asInt;
+    ds >> asInt;
+    a = static_cast<%s>(asInt);
+}

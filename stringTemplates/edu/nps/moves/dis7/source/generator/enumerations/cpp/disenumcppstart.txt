@@ -1,0 +1,27 @@
+#include <algorithm>
+#include <unordered_map>
+
+#include <dis/enumerations/%s.h>
+
+#if __cplusplus >= 201402 // C++14
+#include <shared_time_mutex>
+#else
+#include <mutex>
+#endif
+
+using namespace %s;
+using UID_%s = %s;
+
+// Define the hash for the unordered_map
+namespace std {
+    template<>
+    struct hash< %s::%s >
+    {
+        std::size_t operator()(const %s::%s& enumValue) const
+        {
+            return hash< uint%s_t >{}(static_cast<uint%s_t>(enumValue));
+        }
+    };
+ }
+
+

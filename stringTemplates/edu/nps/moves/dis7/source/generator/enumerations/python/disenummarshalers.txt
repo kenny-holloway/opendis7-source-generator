@@ -1,0 +1,2 @@
+    def get_marshaled_size(self):
+        return %s

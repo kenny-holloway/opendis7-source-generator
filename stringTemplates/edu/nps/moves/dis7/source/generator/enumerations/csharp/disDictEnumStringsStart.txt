@@ -1,0 +1,5 @@
+
+std::string to_string(%s %s)
+{
+   static constexpr const char* names[] = 
+   {

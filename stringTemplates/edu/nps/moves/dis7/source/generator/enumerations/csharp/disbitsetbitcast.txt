@@ -1,0 +1,14 @@
+    //sizeof(T2) == sizeof(T1) &&
+#if __cplusplus <= 202002L
+template <class T2, class T1>
+inline typename std::enable_if<
+    std::is_pod<T1>::value &&
+    std::is_pod<T2>::value,
+    T2>::type
+bit_cast(const T1& src) noexcept
+{
+  T2 t2;
+  std::memcpy( std::addressof(t2), std::addressof(src), sizeof(T1) );
+  return t2;
+}
+#endif

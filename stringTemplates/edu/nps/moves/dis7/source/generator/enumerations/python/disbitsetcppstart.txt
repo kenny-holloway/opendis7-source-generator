@@ -1,0 +1,15 @@
+#include <cstdint>
+#include <iosfwd>
+#include <sstream>
+#include <cstring>
+#include <type_traits>
+#include <bitset>
+#include <dis/utils/DataStream.h>
+
+#if __cplusplus >= 202002L
+    #include <bit>
+#endif
+
+#include <%s%s.h>
+
+%s

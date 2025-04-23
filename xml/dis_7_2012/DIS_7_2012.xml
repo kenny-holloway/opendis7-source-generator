@@ -1323,7 +1323,7 @@ dB and RPM)"/>
     <class name="FundamentalOperationalData" inheritsFrom="root" comment="Basic operational data for IFF. Section 6.2.39">
 
         <attribute name="systemStatus" comment="system status, IEEE DIS 7 defined">
-            <primitive type="uint8"/>
+	    <sisoenum type="SystemOnOffStatus" comment="uid 2120"/>
         </attribute>
     
         <attribute name="dataField1" comment="data field 1">

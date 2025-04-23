@@ -1,0 +1,19 @@
+void %s::marshal(dis::DataStream& ds)
+{
+   DisBitSet::marshal<uint%s_t>(ds);
+}
+
+void %s::unmarshal(dis::DataStream& ds)
+{
+   DisBitSet::unmarshal<uint%s_t>(ds);
+}
+
+bool %s::operator==(const %s& right) const
+{
+   return static_cast< DisBitSet<%s> > (*this) == static_cast< DisBitSet<%s> > (right);
+}
+
+bool %s::operator!=(const %s& right) const
+{
+   return static_cast< DisBitSet<%s> > (*this) != static_cast< DisBitSet<%s> > (right);
+}

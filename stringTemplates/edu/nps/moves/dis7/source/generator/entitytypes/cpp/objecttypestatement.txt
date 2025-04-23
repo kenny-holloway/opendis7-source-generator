@@ -1,0 +1,1 @@
+    set%s(static_cast<%s>(%s)); // %s

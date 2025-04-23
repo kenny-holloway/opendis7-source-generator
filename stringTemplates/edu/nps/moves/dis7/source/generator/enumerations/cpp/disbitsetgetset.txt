@@ -1,0 +1,9 @@
+%s %s::Get%s() const
+{
+   return Get%s<%s>(%s);
+}
+
+void %s::Set%s(const %s value)
+{
+   Set%s(%s, static_cast<uint16_t>(value));
+}

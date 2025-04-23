@@ -1,0 +1,6 @@
+
+std::string to_string(%s %s)
+{
+
+    static std::map<%s, std::string> enumNames = 
+    {

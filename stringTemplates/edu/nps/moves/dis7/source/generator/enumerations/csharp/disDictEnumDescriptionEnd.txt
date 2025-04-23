@@ -1,0 +1,11 @@
+        "Invalid"
+    };
+    // Return description of enumeration or INVALID if not valid enumeration
+    const auto index = static_cast<size_t>(std::min(a, %s::INVALID));
+    return std::string(cstr[index]);
+}
+
+bool EnumIsValid(%s a)
+{
+   return (std::min(a, %s::INVALID) != %s::INVALID);
+}

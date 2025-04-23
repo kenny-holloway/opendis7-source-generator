@@ -1,0 +1,8 @@
+        if value in %s:
+            return %s[value]
+        else:
+            return "Not Found"
+
+    @staticmethod
+    def to_string():
+        return pformat(dict(%s.__members__))

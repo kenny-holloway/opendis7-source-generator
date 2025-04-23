@@ -1,0 +1,20 @@
+        public override int GetHashCode() => (%s).GetHashCode();
+
+        public override bool Equals(Object obj) => this.Equals(obj as %s);
+
+        public bool Equals(%s aValue)
+        {
+            if (aValue is null) return false;
+
+            // Same instance, optimal
+            if (Object.ReferenceEquals(this, aValue)) return true;
+
+            if (this.GetType() != aValue.GetType()) return false;
+
+            return (%s.Equals(aValue.%s));
+        }
+
+        public static bool operator==(%s left, %s right)
+            => ReferenceEquals(left, right) || left.Equals(right);
+
+        public static bool operator!=(%s left, %s right) => !(left == right);
