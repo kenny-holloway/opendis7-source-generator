@@ -264,71 +264,107 @@ public class GenerateEntityTypes
   // PlatformDomain getter methods
     private static String PlatformDomainDescriptionMethod(int aValue)
     {
-      return platformDomainEnums.get(aValue).description;
+      return GetEnumDescription(platformDomainEnums, aValue);
     }
     private static String PlatformDomainFromIntMethod(int aValue)
     {
-      return "PlatformDomain." + platformDomainEnums.get(aValue).name;
+      return "PlatformDomain." + GetEnumName(platformDomainEnums, aValue);
     }
     private static String PlatformDomainNameMethod(int aValue)
     {
       return platformDomainEnums.get(aValue).name;
     }
 
+    private static Optional<EnumRowElem> GetEnumByValue(List<EnumRowElem> enumList, String aValue)
+    {
+      return enumList.stream()
+          .filter(p -> p.value.equals(aValue))
+          .findFirst();
+    }
+
+    private static String GetEnumDescription(List<EnumRowElem> enumList, int aValue)
+    {
+        String description = "NotFound";
+
+        Optional<EnumRowElem> enumElement = GetEnumByValue(enumList, Integer.toString(aValue));
+        if (enumElement.isPresent())
+        {
+           description = enumElement.get().description;
+        }
+
+        return description;
+    }
+
+    private static String GetEnumName(List<EnumRowElem> enumList, int aValue)
+    {
+        String name = "NotFound";
+
+        Optional<EnumRowElem> enumElement = GetEnumByValue(enumList, Integer.toString(aValue));
+        if (enumElement.isPresent())
+        {
+           name = enumElement.get().name;
+        }
+
+        return name;
+    }
+
   // Country getter methods
     private static String CountryDescriptionMethod(int aValue)
     {
-      return countryEnums.get(aValue).description;
+      return GetEnumDescription(countryEnums, aValue);
     }
+
     private static String CountryFromIntMethod(int aValue)
     {
-      return "Country." + countryEnums.get(aValue).name;
+      return "countr." + GetEnumName(countryEnums, aValue);
     }
+
     private static String CountryNameMethod(int aValue)
     {
-      return countryEnums.get(aValue).name;
+      return GetEnumName(countryEnums, aValue);
     }
 
   // Entity Kind getter methods
     private static String KindDescriptionMethod(int aValue)
     {
-      return entityKindEnums.get(aValue).description;
+      return GetEnumDescription(entityKindEnums, aValue);
     }
     private static String KindFromIntMethod(int aValue)
     {
-      return "EntityKind." + entityKindEnums.get(aValue).name;
+      return "EntityKind." + GetEnumName(entityKindEnums, aValue);
     }
     private static String KindNameMethod(int aValue)
     {
-      return entityKindEnums.get(aValue).name;
+      return GetEnumName(entityKindEnums, aValue);
     }
 
   // Munition Domain getter methods
     private static String MunitionDomainDescriptionMethod(int munitionValue)
     {
-      return munitionDomainEnums.get(munitionValue).description;
+      return GetEnumDescription(munitionDomainEnums, munitionValue);
     }
     private static String MunitionDomainFromIntMethod(int aValue)
     {
-      return "MunitionDomain." + munitionDomainEnums.get(aValue).name;
+      return "MunitionDomain." + GetEnumName(munitionDomainEnums, aValue);
+
     }
     private static String MunitionDomainNameMethod(int aValue)
     {
-      return munitionDomainEnums.get(aValue).name;
+      return GetEnumName(munitionDomainEnums, aValue);
     }
 
   // Supply Domain Getter Methods
     private static String SupplyDomainDescriptionMethod(int supplyValue)
     {
-      return supplyDomainEnums.get(supplyValue).description;
+      return GetEnumDescription(supplyDomainEnums, supplyValue);
     }
     private static String SupplyFromIntMethod(int aValue)
     {
-      return "SupplyDomain." + supplyDomainEnums.get(aValue).name;
+      return "SupplyDomain." + GetEnumName(supplyDomainEnums, aValue);
     }
     private static String SupplyDomainNameMethod(int aValue)
     {
-      return supplyDomainEnums.get(aValue).name;
+      return GetEnumName(supplyDomainEnums, aValue);
     }
 
   // Don't put imports in code for this, needs to have enumerations built first; do it this way
@@ -639,7 +675,10 @@ public class GenerateEntityTypes
       languageFolder = "";
 
     try {
-      licenseTemplate          = loadOneTemplate("../pdus/dis7javalicense.txt");
+      if (language.equals(PYTHON))
+        licenseTemplate          = loadOneTemplate("../pdus/dis7pythonlicense.txt");
+      else
+        licenseTemplate          = loadOneTemplate("../pdus/dis7javalicense.txt");
       entitytypecommonTemplate = loadOneTemplate("../entitytypes/" + languageFolder + "/entitytypecommon.txt");
       uidfactoryTemplate       = loadOneTemplate("../entitytypes/" + languageFolder + "/uidfactory.txt");
     }
@@ -1095,14 +1134,16 @@ public class GenerateEntityTypes
         String fileExtension = StringUtils.getSourceFileExtension(language);
 
         // end the ctor statement
-        data.sb.append("    }\n");
+        if (!language.toLowerCase().equals(PYTHON))
+          data.sb.append("    }\n");
 
         if (!language.toLowerCase().equals(JAVA))
         {
           if (language.toLowerCase().equals(CPP))
             data.sb.append("};\n");
-          else
+          else if (!language.toLowerCase().equals(PYTHON))
             data.sb.append("}\n");
+
           data.sb.append("\n");
           data.sb.append(StringUtils.formatNamespaceEndStatement(currentNamespace, language));
           saveFile(data.directory, data.className + fileExtension, data.sb.toString());
@@ -1182,17 +1223,23 @@ public class GenerateEntityTypes
     {
       String currentSpecificName  = new String(); // handle potential nulls
       String currentSpecificValue = new String();
+      int currentSpecificNumericValue = 0;
+
+
       if (currentSpecific != null)
       {
           currentSpecificName  = fixName(currentSpecific.description);
           currentSpecificValue = " = " + "<code>" + currentSpecific.value + "</code>";
+          currentSpecificNumericValue = Integer.parseInt(currentSpecific.value);
       }
       else
       {
           currentSpecificValue  = "<code>(none)</code>"; // second of two entries to avoid whitespace
       }
+
       String currentSubCategoryName  = new String(); // handle potential nulls
       String currentSubCategoryValue = new String();
+      int currentSubCategoryNumericValue = 0;
       if (currentSubCategory != null)
       {
           currentSubCategoryName  = fixName(currentSubCategory.description);
@@ -1200,6 +1247,7 @@ public class GenerateEntityTypes
           currentSubCategoryName  = currentSubCategoryName.substring(0,1) + 
                                     currentSubCategoryName.substring(1).replace("_","");
           currentSubCategoryValue = " = " + "<code>" + currentSubCategory.value + "</code>";
+          currentSubCategoryNumericValue = Integer.parseInt(currentSubCategory.value);
       }
       else
       {
@@ -1229,12 +1277,56 @@ public class GenerateEntityTypes
         usingNamespaceStatement += "\n";
         usingNamespaceStatement += "using namespace " + enumNamespace  + ";";
       }
+      else if (language.toLowerCase().equals(PYTHON))
+      {
+        usingNamespaceStatement += "from " + globalNamespace + ".entity_type import EntityType\n";
+        usingNamespaceStatement += "from " + globalNamespace + ".domain import Domain\n";
+        usingNamespaceStatement += "from " + enumNamespace + ".country import Country\n";
+        usingNamespaceStatement += "from " + enumNamespace + ".entity_kind import EntityKind\n";
+      }
       else
       {
         usingNamespaceStatement  = "using " + enumNamespace + ";";
       }
 
-      String contents = String.format(entitytypecommonTemplate,       data.pkg,     // Class definition 
+      String contents = "";
+
+      if (language.toLowerCase().equals(PYTHON))
+      {
+
+        contents = String.format(entitytypecommonTemplate,
+                                      data.pkg,     // package comment
+                                      usingNamespaceStatement,
+                                      data.className,                                     // Opening sentence
+                                      data.className,                 data.className,     // Usage 
+
+                                      data.countryNamePretty,         data.countryValue,
+                                      data.entityDomainName,          data.entityDomainValue,
+                                      data.entityKindNameDescription, data.entityKindValue,
+                                      currentCategory.description,    currentCategory.value,
+                                      currentSubCategoryName,         currentSubCategoryValue,
+                                      currentSpecificName,            currentSpecificValue,
+                                      data.entityUid,
+
+                                      sisoSpecificationTitleDate,                         // URL
+
+                                      data.fullName,                                      // Full name. this outputs it all
+                                      data.countryName,                                   // @see Country#*
+                                      data.entityKindName,                                // @see EntityKind#*
+                                      data.entityDomainName,                              // @see %s (interface Domain)
+                                      seeCurrentCategory,                                 // @see Category (if present)
+                                      seeCurrentSubcategory,                              // @see SubCategory (if present)
+                                      data.className,
+                                      data.entityKindName,
+                                      data.entityDomainName, data.entityDomainValue,
+                                      data.countryName,
+                                      currentCategory.value,
+                                      currentSubCategoryNumericValue,
+                                      currentSpecificNumericValue);
+      }
+      else
+      {
+        contents = String.format(entitytypecommonTemplate,       data.pkg,     // Class definition 
                                       usingNamespaceStatement,
                                       data.className,                                     // Opening sentence
                                       data.className,                 data.className, // Usage 
@@ -1258,6 +1350,7 @@ public class GenerateEntityTypes
                                       data.entityKindName, 
                                       data.entityDomainName, 
                                       data.entityDomainValue);
+      }
       
       data.sb.append(licenseTemplate);
       data.sb.append(contents);
