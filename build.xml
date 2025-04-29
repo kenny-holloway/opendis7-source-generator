@@ -145,7 +145,7 @@ POSSIBILITY OF SUCH DAMAGE.
     <target name="all" depends="versions,clean.build,clean" description="Build enumeration and PDU source code, assemble all products.">
         <!-- TODO current configuration is Java only; Python is next -->
         <echo message="timestamp ${timestamp}"/>
-        <fail message="Please build using Ant 1.10.14 or higher.">
+        <fail message="Please build using Ant 1.10.1 or higher.">
             <condition>
                 <not>
                     <antversion atleast="1.10.14"/><!-- recommend latest 1.10.+ -->
@@ -1275,7 +1275,8 @@ WarfareFamilyPdus.xml
         
 
     </target>
-        <target name="generate-source-code-python" depends="clean.build,clean,buildTheGenerator">
+    <target name="generate-source-code-python" depends="clean.build,clean,buildTheGenerator">
+        
         <echo message="=================================================================================="/>
         <echo message="generate-source-code-python stage  1 make enums,         edu.nps.moves.dis7.source.generator.enumerations.GenerateLanguageEnumerations"/>
         <java classname="edu.nps.moves.dis7.source.generator.enumerations.GenerateLanguageEnumerations">
@@ -1347,6 +1348,28 @@ WarfareFamilyPdus.xml
                 <pathelement path="lib/commons-io-2.6.jar"/>
             </classpath>
         </java>
+
+        <echo message="=================================================================================="/>
+        <echo message="generate-source-code-python stage 5 make entities,     edu.nps.moves.dis7.source.generator.entityTypes.GenerateEntityTypes"/>
+        <delete verbose="false" includeEmptyDirs="true" failonerror="false">
+            <fileset dir="src-generated/python/dis7/entities">
+                <include name="**/*"/>
+            </fileset>
+        </delete>
+        <java classname="edu.nps.moves.dis7.source.generator.entityTypes.GenerateEntityTypes">
+            <arg value="xml/SISO/${SISO-REF-010.xml}"/>
+            <arg value="src-generated/python/dis7/entities"/>
+            <arg value="edu.nps.moves.dis7.entities"/>
+            <arg value="python"/>
+            <sysproperty key="xmlpg.namespace" value="dis7"/>
+            <sysproperty key="xmlpg.enumNamespace" value="dis7.siso_ref_010.enums"/>
+            <classpath>
+                <pathelement path="build/classes"/>
+                <pathelement path="lib/commons-io-2.6.jar"/>
+            </classpath>
+        </java>
+        <echo message="generate-source-code-java complete"/>
+        <echo message="=================================================================================="/>
 
     </target>
 
