@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2008-20252, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
+ * Copyright (c) 2008-2025, MOVES Institute, Naval Postgraduate School (NPS). All rights reserved.
  * This work is provided under a BSD open-source license, see project license.html and license.txt
  */
 package edu.nps.moves.dis7.source.generator.pdus;
@@ -7,6 +7,14 @@ package edu.nps.moves.dis7.source.generator.pdus;
 import edu.nps.moves.dis7.source.generator.enumerations.StringUtils;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.FileOutputStream;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+import java.nio.charset.StandardCharsets;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Iterator;
@@ -89,6 +97,8 @@ public class PythonGenerator extends AbstractGenerator
 
         super.setGeneratedSourceDirectoryName(languagePropertiesPython.getProperty("directory"));
 
+        /** Maps the primitive types listed in the XML file to the python types */
+
         // Set up the mapping between Open-DIS primitive types (key) and marshal types in Python (value).
         
         // Set up the mapping between Open-DIS primitive types and marshal types.       
@@ -116,8 +126,41 @@ public class PythonGenerator extends AbstractGenerator
         unmarshalTypes.setProperty("int64",   "long");
         unmarshalTypes.setProperty("float32", "float");
         unmarshalTypes.setProperty("float64", "double");
+
+        GenerateTypesFile();
         
     }
+
+    private void GenerateTypesFile()
+    {
+        String templateFileName = "../pdus/dis7types.txt";
+        String typesFileName = getGeneratedSourceDirectoryName() + "dis7types.py";
+        String typesData = "";
+
+        try {
+            typesData = new String(Files.readAllBytes(Paths.get(getClass().getResource(templateFileName).toURI())), StandardCharsets.UTF_8.name());
+        }
+        catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+
+        try
+        {            
+            File outputFile = new File(typesFileName);
+            outputFile.createNewFile();
+
+            PrintWriter pw = new PrintWriter(outputFile);
+            pw.print(typesData);
+            pw.flush();
+            pw.close();
+        }
+        catch(IOException e)
+        {
+            System.err.println("problem creating Dis Types file " + e);
+        }
+
+    }
+
     public Boolean stringIsBlank(String inputString)
     {
         Boolean result = false;
@@ -282,41 +325,569 @@ public class PythonGenerator extends AbstractGenerator
  
    } // end of writeClasses
     
-    /**
-     * Create custom output
-     * @param printWriter output
-     * @param aClass class of interest
-     */
-    public void writeClass(PrintWriter printWriter, GeneratedClass aClass)
+    private void writePaddingAttribute(PrintWriter printWriter, GeneratedClassAttribute anAttribute, String tabIndent)
+    {
+        String attributeName = anAttribute.getName();
+        String bitCount = String.format("%s", anAttribute.getAttributeKind());
+        GeneratedClassAttribute.ClassAttributeType attrType = anAttribute.getAttributeKind();
+
+        bitCount = bitCount.substring(bitCount.length() - 2);
+
+        String outputString = "";
+        outputString = String.format(tabIndent + "%s: uint8 = []", attributeName);
+        printWriter.print(outputString);
+
+    }
+
+    private void writePrimitiveAttribute(PrintWriter printWriter, GeneratedClassAttribute anAttribute, String tabIndent)
+    {
+        String outputString = "";
+        String defaultValue = anAttribute.getDefaultValue();
+
+        if(defaultValue == null)
+        {
+            if (anAttribute.getType().toLowerCase().contains("float"))
+                defaultValue = "0.0";
+            else
+                defaultValue = "0";
+        }
+
+        // If we're a normal primitivetype, initialize directly; Otherwise, we need a get for this
+        // and a property type, where the get returns the list size
+        // if(anAttribute.getIsDynamicListLengthField() == true)
+        // {
+        //     GeneratedClassAttribute listAttribute = anAttribute.getDynamicListClassAttribute();
+        //     printWriter.println(INDENT + INDENT  + "self._" + anAttribute.getName() + " = " + defaultValue);
+
+        //     String attrName = anAttribute.getName();
+
+        //     String getOper = String.format("        def get_%s(self):\n", attrName)
+        //              .concat(String.format("            return len(self._%s)\n", listAttribute.getName()))
+        //              .concat(String.format("        def set_%s(self, value):\n", attrName))
+        //              .concat(String.format("            self._%s = value\n", attrName))
+        //              .concat(String.format("        %s = property(get_%s, set_%s)\n", attrName, attrName, attrName))
+        //              .concat("\n");
+        //     printWriter.println(getOper);
+        // }
+        // else
+        // {
+
+        
+        // We do not output these, they will have a property defined later
+        if(anAttribute.getIsDynamicListLengthField() == true)
+            outputString = "#";
+        
+        outputString += String.format("%s: %s = %s", anAttribute.getName(), anAttribute.getType(), defaultValue);
+        // printWriter.println(INDENT + INDENT  + "self." + anAttribute.getName() + " = " + defaultValue);
+        // }
+
+        printWriter.print(tabIndent + outputString);
+    }
+
+    private void writeEnumAttribute(PrintWriter printWriter, GeneratedClassAttribute anAttribute, String tabIndent)
+    {
+        String uidValue = anAttribute.getUnderlyingUid();
+        String defaultValue = anAttribute.getDefaultValue();
+        String typeName = anAttribute.getType();
+
+        // normalize the default value
+        if (defaultValue != null)
+        {
+            String defaultValueTokens[] = defaultValue.split("\\.");
+            if (defaultValueTokens[1] != null)
+            {
+                defaultValue = defaultValueTokens[0] + "." + defaultValueTokens[1].toLowerCase();
+            }
+        }
+
+        String outputStatement = "";
+        if (anAttribute.getDefaultValue() == null)
+        {
+            outputStatement = String.format("%s%s: \"%s | None\" = %s.default", tabIndent,  IVAR_PREFIX + anAttribute.getName(), typeName, typeName);
+           // printWriter.println(String.format("%sself.%s = %s.default\n", tabIndent, IVAR_PREFIX + anAttribute.getName(), typeName));
+        }
+        else
+        {
+             // printWriter.println(tabIndent + "self." + anAttribute.getName() + " = " + defaultValue + "\n");
+             outputStatement = String.format("%s%s: \"%s | None\" = %s", tabIndent,  IVAR_PREFIX + anAttribute.getName(), typeName, defaultValue);
+        }
+
+        // String attrComment = "";
+        // if ((anAttribute.getComment() != null) && !anAttribute.getComment().trim().isEmpty())
+        // {
+        //     attrComment = " # " + anAttribute.getComment();
+        // }
+        // else 
+        // {
+        //     attrComment = "# " + IVAR_PREFIX + anAttribute.getName() + " is an undescribed parameter... ";
+        //     // printWriter.println(tabIndent + "# " + IVAR_PREFIX + anAttribute.getName() + " is an undescribed parameter... ");
+        // }
+
+        // outputStatement += attrComment;
+
+        printWriter.print(outputStatement);
+
+    }
+
+    private void writeSisoBitfieldAttribute(PrintWriter printWriter, GeneratedClassAttribute anAttribute, String tabIndent)
+    {
+        String uidValue = anAttribute.getUnderlyingUid();
+        String defaultValue = anAttribute.getDefaultValue();
+        String typeName = anAttribute.getType();
+        String aliasName = uid2ClassName.getProperty(uidValue);
+
+        if (aliasName != null && !aliasName.isEmpty() && !typeName.equals(aliasName)) typeName = aliasName;        
+
+        // need to change the initializer for the Capability Type
+
+        // TODO : Not a fan of this.
+        if (uidValue.equals("55"))
+        {
+            if (defaultValue != null)
+            {
+                defaultValue = removeFirstWord(defaultValue).replace("()", "");
+                // defaultValue += " {}";
+            }
+        }
+
+        // printWriter.println("# Default : " + defaultValue);
+        // if (defaultValue != null)
+        // {
+        //     String defaultValueTokens[] = defaultValue.split("\\.");
+        //     if (defaultValueTokens[1] != null)
+        //     {
+        //         defaultValue = defaultValueTokens[0] + "." + defaultValueTokens[1].toLowerCase();
+        //     }
+        // }
+        // printWriter.println("# Default : " + defaultValue);
+        // if (aliasName != null && !aliasName.isEmpty() && !typeName.equals(aliasName)) typeName = aliasName;
+
+        String outputStatement = "";
+        if (anAttribute.getDefaultValue() == null)
+        {
+            outputStatement =  String.format("%s = None", anAttribute.getName());
+            // outputStatement =  String.format("self.%s = %s()\n",  anAttribute.getName(), typeName);
+        }                
+        else
+        {
+            outputStatement = String.format("%s: \"%s | None\" = %s()", IVAR_PREFIX + anAttribute.getName(),typeName, defaultValue);
+            // if (aliasName.equals(typeName))
+            //     printWriter.println(" # " + tabIndent + IVAR_PREFIX + anAttribute.getName() + " = " + defaultValue + ";\n");
+            // else
+            //     printWriter.println(" # " + tabIndent + IVAR_PREFIX + anAttribute.getName() + " = (" + aliasName + ")" + defaultValue + ";\n");
+        }
+
+        printWriter.print(tabIndent + outputStatement);
+    }
+
+    private void writeClassRefAttribute(PrintWriter printWriter, GeneratedClassAttribute anAttribute, String tabIndent)
+    {
+        String attributeType = anAttribute.getType();
+
+        if (anAttribute.getDefaultValue() != null)
+        {
+            printWriter.println(tabIndent + "# TODO - Process the default value for a CLASSREF type");
+        }
+        
+        String outputStatement = String.format("%s%s: \"%s | None\" = None",
+        tabIndent, anAttribute.getName(), attributeType, attributeType);
+        printWriter.print(outputStatement);
+
+        // printWriter.println(String.format("%s%s:", tabIndent,  IVAR_PREFIX + anAttribute.getName());
+        // printWriter.println(INDENT + INDENT  + anAttribute.getName() + ":")
+        // printWriter.println(INDENT + INDENT  + "self." + anAttribute.getName() + " = " + attributeType + "()");
+    }
+
+    private void writePrimitiveListAttribute(PrintWriter printWriter, GeneratedClassAttribute anAttribute, String tabIndent)
+    {
+        String attributeType = anAttribute.getType();
+        int listLength = anAttribute.getListLength();
+        String listLengthString = "" + listLength;
+
+        String uidValue = anAttribute.getUnderlyingUid();
+        String typeName = anAttribute.getType();
+        String aliasName = uid2ClassName.getProperty(uidValue);
+
+        if (aliasName != null && !aliasName.isEmpty() && !typeName.equals(aliasName)) typeName = aliasName;
+
+        String outputStatement = "";
+        
+        if(anAttribute.getUnderlyingTypeIsPrimitive() == true)
+        {
+            outputStatement += String.format("%s = None", anAttribute.getName());
+        }
+        else
+        {
+            printWriter.println("TODO");
+            printWriter.print(INDENT + INDENT + "self." + anAttribute.getName() + " =  " +
+                            "[");
+            for(int arrayLength = 0; arrayLength < anAttribute.getListLength(); arrayLength++)
+            {
+                printWriter.print(" " + attributeType + "()");
+                if(arrayLength < anAttribute.getListLength() - 1)
+                    printWriter.print(",");
+            }
+            printWriter.println("]");
+        }
+
+        printWriter.print(tabIndent + outputStatement);
+    }
+
+    private void writeObjectListAttribute(PrintWriter printWriter, GeneratedClassAttribute anAttribute, String tabIndent)
+    {
+        String attributeType = anAttribute.getType();
+        int listLength = anAttribute.getListLength();
+        String listLengthString = "" + listLength;
+
+        String outputStatement = "";
+        // outputStatement = String.format("%s: Optional[List[%s]] = None", anAttribute.getName(), anAttribute.getType());
+        outputStatement = String.format("%s: List[%s] = None", anAttribute.getName(), anAttribute.getType());
+
+        // printWriter.print(INDENT + INDENT + "self._" + anAttribute.getName() + " = []");
+
+        printWriter.print(tabIndent + outputStatement);
+    }
+
+    public void writeClassParameters(PrintWriter printWriter, GeneratedClass aClass, String tabIndent)
+    {
+        List ivars = aClass.getClassAttributes();
+
+        // For classes without attributes (abstract) close the init
+        // if (ivars.size() == 0) printWriter.println("):");
+        // else printWriter.println(",");
+
+        for(int idx = 0; idx < ivars.size(); idx++)
+        {
+            GeneratedClassAttribute anAttribute = (GeneratedClassAttribute)ivars.get(idx);
+            String typeName = anAttribute.getType();
+            String attributeName = anAttribute.getName();
+            String uidValue = anAttribute.getUnderlyingUid();
+            String aliasName = uid2ClassName.getProperty(uidValue);
+            String defaultValue = anAttribute.getDefaultValue();
+
+            if (aliasName != null && !aliasName.isEmpty() && !typeName.equals(aliasName)) typeName = aliasName;
+
+            GeneratedClassAttribute.ClassAttributeType attrType = anAttribute.getAttributeKind();
+
+            boolean isLastOne = idx == ivars.size() - 1;
+
+            switch (attrType)
+            {
+                case PADTO16:
+                case PADTO32:
+                case PADTO64:
+                    writePaddingAttribute(printWriter, anAttribute, tabIndent);
+                    break;
+
+                case PRIMITIVE:
+                case STATIC_IVAR:
+                    writePrimitiveAttribute(printWriter, anAttribute, tabIndent);
+                    break;
+
+                case SISO_ENUM:
+                    writeEnumAttribute(printWriter, anAttribute, tabIndent);
+                    break;
+
+                case SISO_BITFIELD:
+                    writeSisoBitfieldAttribute(printWriter, anAttribute, tabIndent);
+                    break;
+
+                case CLASSREF:
+                    writeClassRefAttribute(printWriter, anAttribute, tabIndent);
+                    break;
+
+                case PRIMITIVE_LIST:
+                     writePrimitiveListAttribute(printWriter, anAttribute, tabIndent);
+                    break;
+
+                case OBJECT_LIST:
+                    writeObjectListAttribute(printWriter, anAttribute, tabIndent);
+                    break;
+
+            }
+
+            if (isLastOne)
+            {
+                printWriter.println("):");
+            }
+            else
+            {
+                printWriter.println(",");
+            }
+
+
+        }
+
+
+    }
+
+    private void DebugPrintClassAttributes(PrintWriter printWriter, GeneratedClass aClass, String tabIndent)
     {
 
-        int numClassAttributes = aClass.getClassAttributes().size();
+        // String commentString = String.format("%20s %-20s : %s", anAttribute.getName(), "(" + anAttribute.getType() + ")", attrComment);
 
-        String tabIndent = StringUtils.tabs(2);
+        if (debugAttributes.equals("true"))
+        {
+            List ivars = aClass.getClassAttributes();
 
+            printWriter.println("");
+            printWriter.println(tabIndent + "\"\"\"");
+            printWriter.println(tabIndent + "Attribute Types");
+            printWriter.println(tabIndent + "Class " + aClass.getName() + " has " + ivars.size() + " Attributes");
+            for (int idx = 0; idx < aClass.getClassAttributes().size(); idx++)
+            {
+                GeneratedClassAttribute anAttribute = aClass.getClassAttributes().get(idx);
+                printWriter.println(tabIndent + tabIndent + String.format("%-20s : %s", anAttribute.getName(), anAttribute.getAttributeKind()));
+                // printWriter.println(tabIndent + "    ///    " +  anAttribute.getName() + "\t : " + anAttribute.getAttributeKind());;
+            }
+             printWriter.println(tabIndent + "\"\"\"");
+             printWriter.println("");
+        } 
+    }
+
+    public void writeClassParameterComments(PrintWriter printWriter, GeneratedClass aClass, String tabIndent)
+    {
         printWriter.println();
-        
-        String parentClassName = aClass.getParentClass();
-        if(parentClassName.equalsIgnoreCase("root"))
-            parentClassName = "object";
-        
-        printWriter.println("class " + aClass.getName() + "( " + parentClassName + " ):");
-        this.writeClassComments(printWriter, aClass);
+        printWriter.println(tabIndent  + "\"\"\"");
+        printWriter.println(tabIndent + aClass.getClassComments());
+        printWriter.println();
+        printWriter.println(tabIndent + "Args:");
 
-        printWriter.println(INDENT + "def __init__(self):");
-        printWriter.println(INDENT + INDENT + "\"\"\" Initializer for " + aClass.getName() + "\"\"\"");
+        List ivars = aClass.getClassAttributes();
+        for(int idx = 0; idx < ivars.size(); idx++)
+        {
+            GeneratedClassAttribute anAttribute = (GeneratedClassAttribute)ivars.get(idx);
 
-        // If this is a subclass, call the superclass intializer
-        if(!aClass.getParentClass().equalsIgnoreCase("root"))
-        {
-            // printWriter.println(INDENT + INDENT  + "super(" + aClass.getParentClass() + ", self).__init__()");
-            printWriter.println(INDENT + INDENT  + "super().__init__()");
+            String attrComment = "";
+            if ((anAttribute.getComment() != null) && !anAttribute.getComment().trim().isEmpty())
+            {
+                attrComment = " # " + anAttribute.getComment();
+            }
+            else 
+            {
+                attrComment = "# " + IVAR_PREFIX + anAttribute.getName() + " is an undescribed parameter... ";
+                // printWriter.println(tabIndent + "# " + IVAR_PREFIX + anAttribute.getName() + " is an undescribed parameter... ");
+            }
+
+            String commentString = String.format("%25s %-25s : %s", anAttribute.getName(), "(" + anAttribute.getType() + ")", attrComment);
+
+            printWriter.println(tabIndent + tabIndent + commentString);
+
         }
-        else if (numClassAttributes == 0)
-        {
-            printWriter.println(INDENT + INDENT + "pass");
-        }
+
+        printWriter.println(tabIndent + "\"\"\"");
+
+        DebugPrintClassAttributes(printWriter, aClass, tabIndent);
+
+    }
+
+    public void writeClassParameterAssignments(PrintWriter printWriter, GeneratedClass aClass, String tabIndent)
+    {
+        List ivars = aClass.getClassAttributes();
         
+        for(int idx = 0; idx < ivars.size(); idx++)
+        {
+
+            GeneratedClassAttribute anAttribute = (GeneratedClassAttribute)ivars.get(idx);
+            GeneratedClassAttribute.ClassAttributeType attrType = anAttribute.getAttributeKind();
+
+            String typeName = anAttribute.getType();
+            String attributeName = anAttribute.getName();
+            String uidValue = anAttribute.getUnderlyingUid();
+            String aliasName = uid2ClassName.getProperty(uidValue);
+            String defaultValue = anAttribute.getDefaultValue();
+            
+            if (aliasName != null && !aliasName.isEmpty() && !typeName.equals(aliasName)) typeName = aliasName;
+
+            // DebugPrintAttribute(printWriter, anAttribute, tabIndent);
+
+        //             if (defaultValue != null)
+        // {
+        //     String defaultValueTokens[] = defaultValue.split("\\.");
+        //     if (defaultValueTokens[1] != null)
+        //     {
+        //         defaultValue = defaultValueTokens[0] + "." + defaultValueTokens[1].toLowerCase();
+        //     }
+        // }
+
+            String outputStatement = "";
+            
+            switch (attrType)
+            {
+                case PRIMITIVE:
+                    if(anAttribute.getIsDynamicListLengthField() != true)
+                    {
+                        outputStatement += String.format("self.%s = %s\n", attributeName, attributeName);
+                    }
+                    else outputStatement += "\n";
+                    break;
+
+                case SISO_BITFIELD:
+                    {
+                        StringBuilder commandSet = new StringBuilder();
+                        commandSet.append(tabIndent + "\n# Put out the allocation of a bitfield type\n");
+                        // commandSet.append("   name : " +attributeName + "\n");
+                        // commandSet.append("  alias : " + aliasName + "\n");
+                        // commandSet.append("default : " +defaultValue + "\n");
+                        
+                        commandSet.append(tabIndent + String.format("if %s is None:\n", attributeName));
+                        commandSet.append(tabIndent + String.format("    self.%s = %s()\n", attributeName, typeName));
+                        commandSet.append(tabIndent + String.format("else:\n", attributeName, attributeName));
+                        commandSet.append(tabIndent + String.format("    self.%s = %s\n", attributeName, attributeName));
+                        outputStatement += commandSet.toString();
+                    }
+                    break;
+
+                case CLASSREF:
+                    printWriter.println(tabIndent + "# TODO : process any default for CLASSREF");
+                    outputStatement += String.format("self.%s = %s or %s()\n", attributeName, attributeName, typeName);
+                    break;
+
+                case PADTO16:
+                case PADTO32:
+                case PADTO64:
+                    outputStatement += String.format("self.%s = %s\n", attributeName, attributeName);
+                    outputStatement += tabIndent+ String.format("self.padToSize = %s\n", attrType);
+                    break;
+
+                case PRIMITIVE_LIST:
+                    int listLength = anAttribute.getListLength();
+                    outputStatement += String.format("self.%sListSize = %s\n",attributeName, listLength);
+
+                    StringBuilder commandSet = new StringBuilder();
+                    commandSet.append(tabIndent + String.format("if %s is None:\n", attributeName));
+                    commandSet.append(tabIndent + String.format("    self.%s = [0 for _ in range(self.%sListSize)]\n", attributeName, attributeName));
+                    commandSet.append(tabIndent + String.format("else:\n"));
+                    commandSet.append(tabIndent + String.format("    self.%s = %s\n", attributeName, attributeName));
+                    outputStatement += commandSet.toString();
+
+                    // if characters is None:
+                    //     self.characters = [0 for _ in range(self.characterSetSize)]
+                    // else:
+                    //     self.characters = characters 
+
+                    break;
+
+                case OBJECT_LIST:
+                    StringBuilder objBuilder = new StringBuilder();
+                    outputStatement += "\n";
+                    outputStatement += tabIndent + String.format("if %s is None:\n", attributeName);
+                    outputStatement += tabIndent + String.format("    self.%s = []\n", attributeName);
+                    outputStatement += tabIndent + String.format("else:\n");
+                    outputStatement += tabIndent + String.format("    self.%s = %s\n", attributeName, attributeName);
+
+                    // objBuilder.append("\n");
+                    // objBuilder.append(tabIndent + String.format("if %s is None:\n", attributeName));
+                    // objBuilder.append(tabIndent + String.format("    self.%s = []\n", attributeName));
+                    // objBuilder.append(tabIndent + String.format("else:\n"));
+                    // objBuilder.append(tabIndent + String.format("    self.%s = %s\n", attributeName, attributeName));
+                    // outputStatement += objBuilder.toString();
+                    break;
+
+                case STATIC_IVAR:
+                    outputStatement += String.format("self._%s = %s\n", attributeName, attributeName);
+                    // Want to skip this, spec has it as a class attribute like for the ctor, but it may not be
+                    break;
+
+                default:
+                    outputStatement += String.format("self.%s = %s\n", attributeName, attributeName);
+                    break;
+            }
+            
+            printWriter.print(tabIndent + outputStatement);
+
+            // en enum with default:
+            // self.country = country or Country.default
+
+            // a classRef without default:
+            // self.domain = domain or Domain()
+
+
+            // If it has a default, can just use the value
+            // self.entityKind = entityKind
+
+            // Samples
+            // self.entityKind = entityKind or EntityKind.default
+            // self.domain = domain or Domain()
+            // self.country = country or Country.default
+            // self.category = category
+            // self.subCategory = subCategory
+            // self.specific = specific
+            // self.extra = extra
+
+        //             String uidValue = anAttribute.getUnderlyingUid();
+        // String defaultValue = anAttribute.getDefaultValue();
+        // String typeName = anAttribute.getType();
+
+        // // normalize the default value
+        // if (defaultValue != null)
+        // {
+        //     String defaultValueTokens[] = defaultValue.split("\\.");
+        //     if (defaultValueTokens[1] != null)
+        //     {
+        //         defaultValue = defaultValueTokens[0] + "." + defaultValueTokens[1].toLowerCase();
+        //     }
+        // }
+
+        // String outputStatement = "";
+        // if (anAttribute.getDefaultValue() == null)
+        // {
+        //     outputStatement = String.format("%s%s: \"%s | None\" = %s.default", tabIndent,  IVAR_PREFIX + anAttribute.getName(), typeName, typeName);
+        //    // printWriter.println(String.format("%sself.%s = %s.default\n", tabIndent, IVAR_PREFIX + anAttribute.getName(), typeName));
+        // }
+        // else
+        // {
+        //      // printWriter.println(tabIndent + "self." + anAttribute.getName() + " = " + defaultValue + "\n");
+        //      outputStatement = String.format("%s%s: \"%s | None\" = %s", tabIndent,  IVAR_PREFIX + anAttribute.getName(), typeName, defaultValue);
+        // }
+        }
+    }
+
+    private void writeClassProperties(PrintWriter printWriter, GeneratedClass aClass, String tabIndent)
+    {
+        // Write out the "hidden" static ivar settings
+        StringBuilder commandSet = new StringBuilder();
+        List ivars = aClass.getClassAttributes();
+
+        for(int idx = 0; idx < ivars.size(); idx++)
+        {
+            GeneratedClassAttribute anAttribute = (GeneratedClassAttribute)ivars.get(idx);
+
+            String attributeName = anAttribute.getName();
+            GeneratedClassAttribute.ClassAttributeType attrType = anAttribute.getAttributeKind();
+
+            if (attrType == GeneratedClassAttribute.ClassAttributeType.STATIC_IVAR)
+            {
+                commandSet.append(tabIndent + String.format("def %s(self):\n", attributeName));
+                commandSet.append(tabIndent + String.format("    return self._%s\n\n", attributeName));
+            }
+
+            printWriter.write(commandSet.toString());
+        }
+    }
+    
+
+    private void DebugPrintAttribute(PrintWriter printWriter, GeneratedClassAttribute anAttribute, String tabIndent)
+    {
+        if (debugAttributes.equals("true"))
+        {
+            String uidValue = anAttribute.getUnderlyingUid();
+            String aliasName = uid2ClassName.getProperty(uidValue);
+
+            printWriter.println(tabIndent + "\"\"\"");
+            printWriter.println(tabIndent + "/// --------------------------------------------------------------------------");
+            printWriter.println(tabIndent + "/// ATTRIBUTE");
+            printWriter.println(anAttribute.ToString(tabIndent));
+            printWriter.println(tabIndent + "///           Alias : " + aliasName);
+            printWriter.println(tabIndent + "\"\"\"");
+        }
+    }
+
+    private void holdOldCode(PrintWriter printWriter, GeneratedClass aClass, String tabIndent)
+    {
+// Comment this code out for now
+    if (false)
+    {
         // Write class attributes
         List ivars = aClass.getClassAttributes();
 if (debugAttributes.equals("true"))
@@ -564,7 +1135,66 @@ if (debugAttributes.equals("true"))
             }
              
         } // end of loop through attributes
+    }
+    }
+
+    private void writeSuperInit(PrintWriter printWriter, GeneratedClass aClass, String tabIndent)
+    {
+        int numClassAttributes = aClass.getClassAttributes().size();
+
+        // If this is a subclass, call the superclass intializer
+        if(!aClass.getParentClass().equalsIgnoreCase("root"))
+        {
+            // printWriter.println(INDENT + INDENT  + "super(" + aClass.getParentClass() + ", self).__init__()");
+            printWriter.println(tabIndent  + "super().__init__()\n");
+        }
+        else if (numClassAttributes == 0)
+        {
+            printWriter.println(tabIndent + "pass");
+        }
+    }
+
+    /**
+     * Create custom output
+     * @param printWriter output
+     * @param aClass class of interest
+     */
+    public void writeClass(PrintWriter printWriter, GeneratedClass aClass)
+    {
+
+        int numClassAttributes = aClass.getClassAttributes().size();
+
+        String tabIndent = StringUtils.tabs(2);
+
+        printWriter.println();
         
+        String parentClassName = aClass.getParentClass();
+        if(parentClassName.equalsIgnoreCase("root"))
+            parentClassName = "object";
+        
+        printWriter.println("class " + aClass.getName() + "( " + parentClassName + " ):");
+        this.writeClassComments(printWriter, aClass);
+
+        printWriter.println(INDENT + "\"\"\" Initializer for " + aClass.getName() + "\"\"\"");
+        
+        // Output constructor paramaters
+        if (numClassAttributes > 0)
+        {
+            printWriter.println(INDENT + "def __init__(self,");
+            writeClassParameters(printWriter, aClass, tabIndent);
+            writeClassParameterComments(printWriter, aClass, tabIndent);
+            writeSuperInit(printWriter, aClass, tabIndent);
+            writeClassParameterAssignments(printWriter, aClass, tabIndent);
+            writeClassProperties(printWriter, aClass, tabIndent);
+        }
+        else 
+        {
+            printWriter.println(INDENT + "def __init__(self):");
+            writeSuperInit(printWriter, aClass, tabIndent);
+        }
+
+        // Write out the static IVARS here.
+
         // Some variables may be set to an inital value.
         List inits = aClass.getInitialValues();
         for(int idx = 0; idx < inits.size(); idx++)
@@ -669,30 +1299,45 @@ if (debugAttributes.equals("true"))
                         GeneratedClassAttribute listAttribute = anAttribute.getDynamicListClassAttribute();
 
                         pw.println('\n');
+                        pw.println(tabIndent + "@property");
+                        pw.println(String.format("%sdef %s(self):", tabIndent, anAttribute.getName()));
+                        pw.println(String.format("%s%sreturn len(self.%s)", tabIndent, tabIndent, listAttribute.getName()));
+                        pw.println();
+                        pw.println(String.format("%s@%s.setter", tabIndent, anAttribute.getName()));
+                        pw.println(String.format("%sdef %s(self, new_value: %s):", tabIndent, anAttribute.getName(), anAttribute.getType()));
+                        pw.println(String.format("%s%sself._%s = new_value", tabIndent, tabIndent, anAttribute.getName()));
+
                         // pw.println(tabIndent + "@property");
-                        // pw.println(String.format("%sdef %s(self):", tabIndent, anAttribute.getName()));
-                        
-                        pw.println(String.format("%sdef get_%s(self):", tabIndent, anAttribute.getName()));
-                        pw.println(String.format("%s%sreturn len(self._%s)", tabIndent, tabIndent, listAttribute.getName()));
-                        pw.println(String.format("%sdef set_%s(self, value):", tabIndent, anAttribute.getName()));
-                        pw.println(String.format("%s%s%s = value", tabIndent, tabIndent, anAttribute.getName()));
+
+                        // pw.println(String.format("%sdef get_%s(self):", tabIndent, anAttribute.getName()));
+                        // pw.println(String.format("%s%sreturn len(self._%s)", tabIndent, tabIndent, listAttribute.getName()));
+                        // pw.println(String.format("%sdef set_%s(self, value):", tabIndent, anAttribute.getName()));
+                        // pw.println(String.format("%s%s%s = value", tabIndent, tabIndent, anAttribute.getName()));
                         
                      }
                      break;
 
                 case OBJECT_LIST:
-                    pw.println('\n');
+                    String objListText = String.format("\n%sdef get_%s(self):\n", tabIndent, attrName)
+                                 .concat(String.format("%s%sreturn self.%s\n\n", tabIndent, tabIndent, attrName))
+                                 .concat(String.format("%sdef set_%s(self, value):\n", tabIndent, attrName))
+                                 .concat(String.format("%s%sself.%s = value\n", tabIndent, tabIndent, attrName));
+                    pw.println(objListText);
 
-                    pw.println(String.format("%sdef get_%s(self):", tabIndent, attrName));
-                    pw.println(String.format("%s%sreturn self._%s", tabIndent, tabIndent, attrName));
-                    pw.println(String.format("%sdef set_%s(self, value):", tabIndent, attrName));
-                    pw.println(String.format("%s%sself._%s = value", tabIndent, tabIndent, attrName));
-                    pw.println(String.format("%s%s = property(get_%s, set_%s)", tabIndent, attrName, attrName, attrName));
+                    String addObjText = String.format("%sdef add_%s(self, value : %s):\n", tabIndent, attrName, anAttribute.getType())
+                                .concat(String.format("%s%sself.%s.append(value)\n", tabIndent, tabIndent, attrName));
 
-                    pw.println('\n');
-                    pw.println(String.format("%sdef add_%s(self, value : %s):", tabIndent, attrName, anAttribute.getType()));
-                    pw.println(String.format("%s%sself._%s.append(value)", tabIndent, tabIndent, attrName));
-                    pw.println('\n');
+                    pw.println(addObjText);
+                    // pw.println(String.format("%sdef get_%s(self):", tabIndent, attrName));
+                    // pw.println(String.format("%s%sreturn self.%s", tabIndent, tabIndent, attrName));
+                    // pw.println(String.format("%sdef set_%s(self, value):", tabIndent, attrName));
+                    // pw.println(String.format("%s%sself.%s = value", tabIndent, tabIndent, attrName));
+                    // pw.println(String.format("%s%s = property(get_%s, set_%s)", tabIndent, attrName, attrName, attrName));
+
+                    // pw.println('\n');
+                    // pw.println(String.format("%sdef add_%s(self, value : %s):", tabIndent, attrName, anAttribute.getType()));
+                    // pw.println(String.format("%s%sself.%s.append(value)", tabIndent, tabIndent, attrName));
+                    // pw.println('\n');
 
                     pw.println(tabIndent + "\"\"\"");
                     pw.println(anAttribute.ToString(tabIndent));
@@ -723,7 +1368,7 @@ if (debugAttributes.equals("true"))
             {
                 case SISO_ENUM:
                     // pw.println(tabIndent + "# SISO_ENUM");
-                    String enumFormat = "%soutputString += \"%s : \" + self.%s.get_description + \"(\" + (str(int(self.%s))) + \")\" + \"\\n\"";
+                    String enumFormat = "%soutputString += \"%s : \" + self.%s.description + \"(\" + (str(int(self.%s))) + \")\" + \"\\n\"";
                     pw.println(String.format(enumFormat, tabIndent, anAttribute.getType(), anAttribute.getName(), anAttribute.getName()));
                     break;
 
@@ -744,7 +1389,7 @@ if (debugAttributes.equals("true"))
                      if(anAttribute.getIsDynamicListLengthField() == true)
                      {
                           GeneratedClassAttribute listAttribute = anAttribute.getDynamicListClassAttribute();
-                          String primitiveFormat = "%soutputString += \"%s : \" + str(len(self._%s)) + \"\\n\"";
+                          String primitiveFormat = "%soutputString += \"%s : \" + str(len(self.%s)) + \"\\n\"";
                           pw.println(String.format(primitiveFormat, tabIndent, StringUtils.firstCharUpper(anAttribute.getName()), listAttribute.getName()));
                      }
                      else
@@ -779,11 +1424,14 @@ if (debugAttributes.equals("true"))
                     }
                     else
                     {
-                        pw.println(tabIndent + "for idx in range(0, len(self._" + anAttribute.getName() + ")):");
-                        pw.println(tabIndent + StringUtils.tabs(1) + "outputString += self._" +  anAttribute.getName() + "[idx].to_string()");
+                        pw.println(tabIndent + "for idx in range(0, len(self." + anAttribute.getName() + ")):");
+                        pw.println(tabIndent + "    if self." + anAttribute.getName() + "[idx] is not None:");
+                        pw.println(tabIndent + StringUtils.tabs(1) + "    outputString += self." +  anAttribute.getName() + "[idx].to_string()");
                     }
                     pw.println();
                     break;
+
+
             }
         }
     }
@@ -820,15 +1468,17 @@ if (debugAttributes.equals("true"))
     
     public void writeEnumMarshallers(PrintWriter pw, GeneratedClass aClass)
     {
-        String enumMarshallers = "    def serialize_enum(self, enumValue, outputStream):\n"
-                         .concat("        enumSize = enumValue.get_marshaled_size()\n")
+        String enumMarshallers = "    def serialize_enum(self, enumValue, enumSize, outputStream):\n"
+                        //  .concat("        enumSize = enumValue.get_marshaled_size()\n")
                          .concat("        marshallers = {8 : 'byte', 16 : 'short', 32 : 'int'}\n")
-                         .concat("        marshalFunction = getattr(outputStream, 'write_unsigned_' + marshallers[enumSize])\n")
+                         .concat("        slot = (enumSize +7) & ~7\n")
+                         .concat("        marshalFunction = getattr(outputStream, 'write_unsigned_' + marshallers[slot])\n")
                          .concat("        result = marshalFunction(int(enumValue))\n\n")
-                         .concat("    def parse_enum(self, enumValue, intputStream) -> int:\n")
-                         .concat("        enumSize = enumValue.get_marshaled_size()\n")
+                         .concat("    def parse_enum(self, enumValue, enumSize, intputStream) -> int:\n")
+                        //  .concat("        enumSize = enumValue.get_marshaled_size()\n")
                          .concat("        marshallers = {8 : 'byte', 16 : 'short', 32 : 'int'}\n")
-                         .concat("        marshalFunction = getattr(intputStream, 'read_unsigned_' + marshallers[enumSize])\n")
+                         .concat("        slot = (enumSize +7) & ~7\n")
+                         .concat("        marshalFunction = getattr(intputStream, 'read_unsigned_' + marshallers[slot])\n")
                          .concat("        return marshalFunction()\n");
 
             pw.println();
@@ -878,7 +1528,8 @@ if (debugAttributes.equals("true"))
                     // pw.println(INDENT + INDENT + "outputStream.write_" + marshalType + "(int(self." + anAttribute.getName() + "))");
 
                     // self.serialize_enum(self.forceId,outputStream)
-                    pw.println(INDENT + INDENT + "self.serialize_enum(self." + anAttribute.getName() + ",outputStream)");
+                    pw.println(INDENT + INDENT + "enumSize = " + anAttribute.getType() + "().get_marshaled_size()");
+                    pw.println(INDENT + INDENT + "self.serialize_enum(self." + anAttribute.getName() + ",enumSize, outputStream)");
                     
                     // pw.println(INDENT + INDENT + "self." + anAttribute.getName() + ".serialize(outputStream)");
                     break;
@@ -898,7 +1549,7 @@ if (debugAttributes.equals("true"))
                      if(anAttribute.getIsDynamicListLengthField() == true)
                      {
                           GeneratedClassAttribute listAttribute = anAttribute.getDynamicListClassAttribute();
-                          pw.println(INDENT + INDENT + "outputStream.write_" + marshalType + "( len(self._" + listAttribute.getName() + "))");
+                          pw.println(INDENT + INDENT + "outputStream.write_" + marshalType + "( len(self." + listAttribute.getName() + "))");
                      }
                      else
                      {
@@ -939,7 +1590,7 @@ if (debugAttributes.equals("true"))
                     }
                     else
                     {
-                        pw.println(INDENT + INDENT + "for anObj in self._" + anAttribute.getName() + ":");
+                        pw.println(INDENT + INDENT + "for anObj in self." + anAttribute.getName() + ":");
                     }
                     // This is some sleaze. We're an array, but an array of what? We could be either a
                     // primitive or a class. We need to figure out which. This is done via the expedient
@@ -1011,8 +1662,9 @@ if (debugAttributes.equals("true"))
                     String enumName = anAttribute.getType();
                     // self.pad = inputStream.read_byte();
                     // printWriter.println(INDENT + INDENT + "self." + anAttribute.getName() + " = " + enumName + ".get_enum(inputStream.read_" + marshalType + "())");
+                    printWriter.println(INDENT + INDENT + "enumSize = " + anAttribute.getType() + "().get_marshaled_size()");
                     printWriter.println(INDENT + INDENT + "self." + anAttribute.getName() + " = " 
-                             + enumName + ".get_enum(self.parse_enum(self." + anAttribute.getName() + ",inputStream))");
+                             + enumName + ".get_enum(self.parse_enum(self." + anAttribute.getName() + ",enumSize, inputStream))");
 
                     // printWriter.println(INDENT + INDENT + "self." + anAttribute.getName() + ".parse(inputStream)");
                     break;
@@ -1030,7 +1682,11 @@ if (debugAttributes.equals("true"))
 
                 case PRIMITIVE:
                     marshalType = marshalTypes.getProperty(anAttribute.getType());
-                    printWriter.println(INDENT + INDENT + "self." + anAttribute.getName() + " = inputStream.read_" + marshalType + "()");
+                    String localized = "";
+                    if(anAttribute.getIsDynamicListLengthField() == true)
+                        printWriter.println(INDENT + INDENT + "_" + anAttribute.getName() + " = inputStream.read_" + marshalType + "()");
+                    else
+                        printWriter.println(INDENT + INDENT + "self." + anAttribute.getName() + " = inputStream.read_" + marshalType + "()");
                     break;
                     
                 case CLASSREF:
@@ -1060,7 +1716,7 @@ if (debugAttributes.equals("true"))
                     break;
                     
                 case OBJECT_LIST:
-                    printWriter.println(INDENT + INDENT + "for idx in range(0, self." + anAttribute.getCountFieldName() + "):");
+                    printWriter.println(INDENT + INDENT + "for idx in range(0, _" + anAttribute.getCountFieldName() + "):");
 
                     // This is some sleaze. We're an array, but an array of what? We could be either a
                     // primitive or a class. We need to figure out which. This is done via the expedient
@@ -1074,7 +1730,7 @@ if (debugAttributes.equals("true"))
                         printWriter.println(INDENT + INDENT + INDENT + "element = " + anAttribute.getType() + "()");
                         printWriter.println(INDENT + INDENT + INDENT + "element.parse(inputStream)");
                         // printWriter.println(anAttribute.ToString(StringUtils.tabs(3)));
-                        printWriter.println(INDENT + INDENT + INDENT+ "self._" + anAttribute.getName() + ".append(element)");
+                        printWriter.println(INDENT + INDENT + INDENT+ "self." + anAttribute.getName() + ".append(element)");
                     }
                     else // It's a primitive
                     {
@@ -1105,7 +1761,7 @@ if (debugAttributes.equals("true"))
                             .concat("    def __ne__(self, other):\n")
                             .concat("        return not self.__eq__(other)\n")
                             .concat("\n")
-                            .concat("    def diff(self,other) -> set:\n")
+                            .concat("    def diff(self,other) -> set | None:\n")
                             .concat("        diffs = set()\n")
                             .concat("        for key, value in self.__dict__.items():\n")
                             .concat("            value2 = other.__dict__[key]\n")
@@ -1124,7 +1780,7 @@ if (debugAttributes.equals("true"))
                             .concat("                else:\n")
                             .concat("                    diffs.add((key, value))\n")
                             .concat("                    diffs.add((key, value2))\n")
-                            .concat("        return(diffs)\n");
+                            .concat("        return diffs if diffs else None\n");
 
                             //  .concat("    def __hash__(self):\n")
                             //  .concat("        return hash(tuple(sorted(self.__dict__.items())))\n")
@@ -1274,8 +1930,8 @@ if (debugAttributes.equals("true"))
     {
         printWriter.println("#");
         printWriter.println("#This code is licensed under the BSD software license");
-        printWriter.println("# Copyright 2009-2022, MOVES Institute");
-        printWriter.println("# Author: DMcG");
+        printWriter.println("# Copyright 2009-2025, MOVES Institute");
+        printWriter.println("# Author: KenH");
         printWriter.println("#");
     }
     
@@ -1344,7 +2000,10 @@ if (debugAttributes.equals("true"))
     {
         Map<String, String> usingStatements = new HashMap<>();
 
-        pw.println("from enum import Enum\n");
+        pw.println("from enum import Enum");
+        pw.println("from typing import Optional, List");
+        pw.println("from .dis7types import *");
+        pw.println();
 
         // Add using statements for any types used to initialize attributes
         List inits = aClass.getInitialValues();
@@ -1376,7 +2035,6 @@ if (debugAttributes.equals("true"))
             // pw.println("/// Type : " + anAttribute.getType());
             if (anAttribute.getType() == null) continue;
         
-
             String aliasName = uid2ClassName.getProperty(uidValue);
 
             if (aliasName != null && !aliasName.isEmpty() && !typeName.equals(aliasName)) typeName = aliasName;
@@ -1402,6 +2060,7 @@ if (debugAttributes.equals("true"))
                         defaultValue = removeFirstWord(defaultValue).replace("()", "");                        
                         // defaultValue += " {}";
                     }
+
                     String enumPath = StringUtils.removeFirstWord(enumNamespace, "\\.");
                     String pythonPath =  enumPath + "." + StringUtils.camelCasetoLowerUnderscore(defaultValue);
                     usingStatements.put(pythonPath, defaultValue);

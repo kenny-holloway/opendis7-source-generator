@@ -81,6 +81,8 @@ public abstract class AbstractEnumGenerator
     protected String disbitsetopersTemplate;
     protected String disbitsetbitcastTemplate;
     protected String disbitsetunionTemplate;
+    protected String disenumerandTemplate;
+    protected String disExtensibleEnumTemplate;
 
     protected String licenseTemplate;
 
@@ -383,6 +385,8 @@ public abstract class AbstractEnumGenerator
                 disenum8bitmarshalerTemplate       = loadOneTemplate(languageFolder + "/disenum8bitmarshaler.txt");
                 disbitsetopersTemplate             = loadOneTemplate(languageFolder + "/disbitsetopers.txt");
                 disbitsetunionTemplate             = loadOneTemplate(languageFolder + "/disbitsetunion.txt");
+                disenumerandTemplate               = loadOneTemplate(languageFolder + "/disenumerand.txt");
+                disExtensibleEnumTemplate          = loadOneTemplate(languageFolder + "/disextensible_enum.txt");
             }
             
             disenumcommentTemplate             = loadOneTemplate(languageFolder + "/disenumcomment.txt");

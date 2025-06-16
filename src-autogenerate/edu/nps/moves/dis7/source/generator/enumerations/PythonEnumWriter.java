@@ -74,7 +74,7 @@ public class PythonEnumWriter
             // writeEnumOperators(sb, enumElement, classNameCorrected);
             
             sb.append("\n");
-            writeMarshalOperators(sb, enumElement, classNameCorrected);
+            // writeMarshalOperators(sb, enumElement, classNameCorrected);
 
             // end the accessor class
             // sb.append(StringUtils.tabs(1) + "}\n");
@@ -101,6 +101,8 @@ public class PythonEnumWriter
         String enumName = "";
         String firstEnumName = "";
 
+        int numberOfEnumerations = enumElement.elems.size();
+
         enumNames.clear();
 
         for (GeneratedEnumClasses.EnumRowElem row : enumElement.elems) {
@@ -120,7 +122,15 @@ public class PythonEnumWriter
             ++rowCount;
         }
 
-        sb.append(StringUtils.tabs(1) + "default = " + firstEnumName);
+        // couple of bad actors in the spec with no enumerands
+        if (numberOfEnumerations > 0)
+        {
+            sb.append(StringUtils.tabs(1) + "default = " + firstEnumName);
+        }
+        else
+        {
+            sb.append(StringUtils.tabs(1) + "default = unknown");
+        }
 
     }
 
@@ -195,7 +205,8 @@ public class PythonEnumWriter
                                     "UID " + enumElement.uid, 
                                     enumElement.size,  // marshal size
                                     enumElement.name, numberOfEnumerations,  // class has x enumerations total
-                                    className              // enum class defn
+                                    className,              // enum class defn
+                                    enumElement.size
                                     ));
         }
         else
@@ -208,8 +219,8 @@ public class PythonEnumWriter
                                     enumElement.name,
                                     numberOfEnumerations, 
                                     enumElement.footnote,
-                                    enumElement.name, numberOfEnumerations,  // class has x enumerations total
-                                    className              // enum class defn
+                                    className,              // enum class defn
+                                    enumElement.size
                                     ));
         }
     }

@@ -1,0 +1,119 @@
+from collections import OrderedDict
+from .enumerand import Enumerand
+
+class ExtensibleEnumMeta(type):
+    def __getattr__(cls, name):
+        if name in cls.standard_enums:
+            print(cls.standard_enums)
+        if name in cls._members:
+            return cls._members[name]
+        return cls.unknown
+
+class ExtensibleEnum(metaclass=ExtensibleEnumMeta):
+    _members = OrderedDict()
+    
+    standard_enums = OrderedDict()
+    custom_enums   = OrderedDict()
+
+    def __init__(self, value=None):
+        if isinstance(value, ExtensibleEnum):
+            self._members = value._members
+        else:
+            self._members = OrderedDict()
+
+    @classmethod
+    def add_custom(cls, value: int, name: str, description: str):
+        if value in cls.standard_enums:
+            raise Exception(f'Enumerated value {value} is a standard enumeration')
+
+        if value > cls.MAX_VALUE:
+            raise Exception(f"Enumerated value {value} is greater than the max value of {str(cls.MAX_VALUE)}")
+
+        enumerand = Enumerand(value, description)
+        cls.custom_enums[value] = enumerand
+        setattr(cls, name, enumerand)
+
+    @classmethod
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls._members = OrderedDict()    
+        cls.standard_enums = OrderedDict()
+        cls.custom_enums   = OrderedDict()
+
+        cls.MAX_VALUE = (2**cls.BIT_SIZE) - 1
+
+        # Register enum values in the subclass
+        unk = Enumerand(0, "Unknown")
+        cls.standard_enums[0] = unk
+        setattr(cls, "unknown", unk)
+
+        for name, value in cls.__dict__.items():
+            if isinstance(value, Enumerand):                
+                cls.standard_enums[value.value] = value
+
+    @classmethod
+    def is_valid(cls, kind) -> bool:
+        if kind is cls.unknown:            
+            return False
+        return kind.value in cls.standard_enums or kind.value in cls.custom_enums 
+
+    @classmethod
+    def to_string(cls, sortByValue=False):
+        output = [cls.__name__]
+        if cls.standard_enums:
+            standard = OrderedDict(sorted(cls.standard_enums.items())) if sortByValue else cls.standard_enums
+            output.extend(f"{key:10} : {value}" for key, value in standard.items())            
+
+        if cls.custom_enums:
+            custom =  OrderedDict(sorted(cls.custom_enums.items())) if sortByValue else cls.custom_enums
+            output.extend(f"{key:10} : {value} (custom enumerand)" for key, value in custom.items())
+            
+        return "\n".join(output)
+
+    @classmethod
+    def clear_custom(cls):
+        cls.custom_enums.clear()
+
+    @classmethod
+    def top_string(cls):        
+        output = [cls.__name__]
+        enumList = {**cls.standard_enums, **cls.custom_enums}
+        enumList = OrderedDict(sorted(enumList.items()))
+        output.extend(f"{key:10} : {value}" for key, value in enumList.items())            
+        return "\n".join(output)
+        
+    @classmethod
+    def get_enum(cls, value: int) -> Enumerand:
+        if value in cls.standard_enums:
+            return cls.standard_enums[value]
+        if value in cls.custom_enums:
+            return cls.custom_enums[value]
+        return cls.unknown
+
+    def __eq__(self, other):
+        return self._members == other._members
+
+    @classmethod
+    def get_marshaled_size(cls):
+        return cls.BIT_SIZE
+
+    def diff(self,other) -> set:
+        diffs = set()
+        for key, value in self.__dict__.items():
+            value2 = other.__dict__[key]
+            if (value != value2):
+                if type(value) is list:
+                    diffs.add((key, str(value)))
+                    diffs.add((key, str(value2)))
+                elif (type(value).__module__ == "builtins"):
+                    diffs.add((key, value))
+                    diffs.add((key, value2))
+                elif (isinstance(value, Enum)):
+                    diffs.add((key, value))
+                    diffs.add((key, value2))
+                elif (isinstance(value, object)):
+                    diffs.update(value.diff(value2))
+                else:
+                    diffs.add((key, value))
+                    diffs.add((key, value2))
+        return(diffs)

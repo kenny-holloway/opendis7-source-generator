@@ -1,1 +1,1 @@
-    %s = EnumValue(%s, "%s")
+    %s = Enumerand(%s, "%s")

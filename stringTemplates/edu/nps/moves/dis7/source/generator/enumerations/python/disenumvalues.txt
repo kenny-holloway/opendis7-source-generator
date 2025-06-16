@@ -1,2 +1,2 @@
-    std::array<%sEnum, %d> %sEnumValues = 
+    std::array<%sEnum, %d> %sEnumerand = 
     {{ 

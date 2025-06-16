@@ -87,6 +87,8 @@ public class PythonEnumGenerator extends AbstractEnumGenerator
       
       loadNamespaceDefinitions();
 
+      GenerateEnumBaseFiles();
+
       pythonEnumAliases = new Properties();
       pythonEnumAliases.load(getClass().getResourceAsStream("pythonEnumAlias.properties"));
 
@@ -105,6 +107,37 @@ public class PythonEnumGenerator extends AbstractEnumGenerator
       factory.newSAXParser().parse(xmlFile, handler); // apparently can't reuse xmlFile
 
       System.out.println (PythonEnumGenerator.class.getName() + " complete, " + (handler.enums.size()) + " enum classes created.");
+   }
+
+   private void WriteFile(String contents, String filename)
+   {
+        try
+        {
+             File outputFile = new File(filename);
+             outputFile.createNewFile();
+
+             PrintWriter pw = new PrintWriter(outputFile);
+             pw.print(contents);
+             pw.flush();
+             pw.close();
+        }
+        catch(IOException e)
+        {
+            System.err.println("problem creating Dis enumeraion definition file " + e);
+        }
+
+   }
+
+   private void GenerateEnumBaseFiles()
+   {
+      // Convert the templates for the base enum classes to files
+
+        String enumerandFileName = outputDirectory.getAbsolutePath() + "/enumerand.py";
+        String extensibleEnumFileName = outputDirectory.getAbsolutePath() + "/extensible_enum.py";
+
+        WriteFile(disenumerandTemplate, enumerandFileName);
+        WriteFile(disExtensibleEnumTemplate, extensibleEnumFileName);
+
    }
 
 /** Utility class */

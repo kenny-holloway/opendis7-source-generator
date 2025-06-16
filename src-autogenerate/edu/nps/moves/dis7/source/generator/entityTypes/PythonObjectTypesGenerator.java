@@ -104,7 +104,7 @@ public class PythonObjectTypesGenerator extends AbstractObjectTypesGenerator
             ex.printStackTrace(System.err);
         }
 
-        System.out.println("Finished creating C++ Object Types");
+        System.out.println("Finished creating Python Object Types");
     }
 
     public void writeLanguageObjectTypes() throws SAXException, IOException, ParserConfigurationException
@@ -117,7 +117,7 @@ public class PythonObjectTypesGenerator extends AbstractObjectTypesGenerator
 
         loadTemplates();
 
-        System.out.println("Generating C++ object types: ");
+        System.out.println("Generating Python object types: ");
         MyHandler handler = new MyHandler();
         factory.newSAXParser().parse(new File(sisoXmlFile), handler);
         System.out.println (PythonObjectTypesGenerator.class.getName() + " complete."); // TODO  + handler.objects.size() + " enums created.");
